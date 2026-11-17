@@ -1,0 +1,2979 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>天空模擬 · 基礎版</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='%23E2A33B'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F7F6F3; --card:#FFFFFF; --ink:#1E2230; --ink2:#5B6070; --line:#D8D4CA; --dash:#B9B5AB;
+  --indigo:#3F4A8A; --indigo-soft:#E8EAF4; --amber:#E2A33B; --amber-soft:#FBF1DC; --r:14px;
+  --pw:21rem;
+}
+*{box-sizing:border-box}
+html{font-size:16px}
+html.big{font-size:20px}
+html,body{height:100%;margin:0;overflow:hidden}
+body{
+  background:#0b1230;color:var(--ink);line-height:1.5;-webkit-text-size-adjust:100%;
+  font-family:"LXGW WenKai TC","PingFang TC","Noto Sans TC","Microsoft JhengHei","Heiti TC",sans-serif;
+}
+button,input,select{font-family:inherit}
+.app{position:fixed;inset:0;overflow:hidden}
+
+/* 全幅畫面 */
+.skywrap{position:absolute;inset:0;background:#101a3a}
+#sky{display:block;width:100%;height:100%;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+#sky:active{cursor:grabbing}
+
+/* 浮動元件共用 */
+.hud,.info,.floatL,.floatR,.bar,.topctl .seg,.pill{background:rgba(247,246,243,.95);border:.9px solid var(--line)}
+
+/* 頂列 */
+.topbar{position:absolute;top:.75rem;left:.75rem;right:.75rem;display:grid;grid-template-columns:1fr auto;align-items:center;gap:.5rem;pointer-events:none}
+.topbar>*{pointer-events:auto}
+.hud{padding:.25rem .85rem;border-radius:999px;font-size:.95rem;pointer-events:none;color:var(--ink);justify-self:start;white-space:nowrap}
+.hud.r{justify-self:start;font-weight:700;font-size:1.1rem;font-variant-numeric:tabular-nums;pointer-events:auto;cursor:pointer;font-family:inherit;min-height:2.5rem}
+.hud.r::after{content:"▾";margin-left:.5rem;font-size:.8em;color:var(--ink2)}
+.hud.r:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.dtpop{position:absolute;top:3.9rem;left:.75rem;z-index:30;background:rgba(255,255,255,.99);border:.9px solid var(--line);border-radius:var(--r);padding:.7rem .8rem;display:flex;flex-direction:column;gap:.6rem;width:min(23rem,calc(100% - 1.5rem))}
+.dtpop[hidden]{display:none}
+.dtpop .row{display:flex;align-items:center;gap:.4rem;flex-wrap:nowrap}
+.dtpop .row:first-child{justify-content:space-between}
+.dtpop input[type=date]{flex:1;min-width:0;min-height:2.5rem;font-size:1rem;font-family:inherit;border:.9px solid var(--line);border-radius:.6rem;padding:0 .5rem}
+.dtpop input[type=range]{flex:1;min-width:0}
+.dtpop select{flex:1;min-width:0;min-height:2.5rem;font-family:inherit;font-size:1rem;border:.9px solid var(--line);border-radius:.6rem;background:#fff;padding:0 .4rem}
+.dtpop .time2{font-variant-numeric:tabular-nums;min-width:3.3rem}
+.drag-hint{position:absolute;left:50%;transform:translateX(-50%);bottom:5.6rem;z-index:20;background:rgba(247,246,243,.95);border:.9px solid var(--line);border-radius:999px;padding:.35rem 1rem;font-size:.92rem;pointer-events:none;opacity:0;transition:opacity .4s;max-width:92%;text-align:center}
+.drag-hint.show{opacity:1}
+#speedHint{white-space:nowrap;font-size:.85rem}
+@media (max-width:1400px){#speedHint{display:none}}
+@media (max-width:620px){.drag-hint{bottom:13.2rem;font-size:.85rem}}
+.topctl{justify-self:end;display:flex;gap:.5rem;align-items:center}
+.topctl .seg{border-radius:999px}
+.topctl .seg button{background:transparent}
+.topctl .seg button.on{background:var(--indigo-soft)}
+.pill{border-radius:999px;font-weight:700;white-space:nowrap}
+@media (max-width:1180px){
+  .topbar{grid-template-columns:1fr auto;grid-template-areas:"t c"}
+  .hud.r{grid-area:t;justify-self:start}
+  .topctl{grid-area:c}
+}
+
+/* 左上讀數 */
+.info{position:absolute;left:.75rem;top:4.1rem;border-radius:12px;padding:.5rem .8rem;font-size:.88rem;max-width:20rem;pointer-events:none}
+.info .il{display:flex;align-items:center;gap:.4rem;white-space:nowrap}
+.info .il b{font-size:.95rem}
+.info .il span:last-child{font-variant-numeric:tabular-nums}
+.info .sub{color:var(--ink2);font-size:.82rem;margin-top:.1rem}
+.dot{width:.8rem;height:.8rem;border-radius:50%;display:inline-block;border:.9px solid rgba(0,0,0,.18);flex:none}
+.dot.sun{background:var(--amber)}
+.dot.moon{background:#F6F1DE;border-color:#8E93B5}
+@media (max-width:1180px){.info{font-size:.8rem;padding:.4rem .6rem}}
+
+/* 浮動操作列 */
+.floatL,.floatR{position:absolute;bottom:1rem;display:flex;align-items:center;gap:.4rem;border-radius:1.6rem;padding:.35rem .6rem}
+.floatL{left:.75rem}
+.floatR{right:.75rem}
+.floatL>span,.floatR>span{color:var(--ink2);font-size:.88rem;margin:0 .1rem}
+.floatL .btn{min-width:2.75rem;padding:0 .7rem;border-radius:999px}
+.bar{position:absolute;bottom:1rem;left:50%;transform:translateX(-50%);width:min(44rem,calc(100% - 36rem));min-height:4rem;border-radius:2.2rem;display:flex;align-items:center;gap:.8rem;padding:.4rem 1.1rem}
+.bar .time{font-size:1.7rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.bar input[type=range]{flex:1;min-width:3rem}
+.btn.round{border-radius:999px;padding:0 1.1rem;white-space:nowrap}
+@media (max-width:1100px){
+  .floatL,.floatR{bottom:5.6rem}
+  .bar{width:calc(100% - 1.5rem)}
+}
+@media (max-width:620px){.bar .speed{display:none}.bar .time{font-size:1.4rem}}
+.app.panel-open .bar{left:calc((100% - var(--pw) - 1.5rem)/2);width:min(44rem,calc(100% - var(--pw) - 2.5rem))}
+.app.panel-open .floatR{right:calc(var(--pw) + 1.5rem)}
+.app.panel-open .floatL{bottom:5.6rem}
+.app.panel-open .floatR{bottom:5.6rem}
+.app.panel-open .pip{right:calc(var(--pw) + 1.5rem)}
+@media (max-width:760px){.app.panel-open .pip{display:none}}
+
+/* 小視窗 */
+.pip{position:absolute;top:4.1rem;right:.75rem;width:24%;min-width:160px;max-width:340px;aspect-ratio:4/3;height:auto;
+  border:1.5px solid rgba(247,246,243,.95);border-radius:10px;cursor:pointer;display:block;background:#0b1230;touch-action:manipulation}
+.pip.hidden{display:none}
+.pip:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (max-width:1180px){.pip{width:26%;min-width:130px}}
+
+/* 面板 */
+.panel{position:absolute;top:4rem;bottom:.75rem;right:.75rem;width:min(var(--pw),calc(100% - 1.5rem));background:rgba(255,255,255,.98);border:.9px solid var(--line);border-radius:var(--r);
+  display:flex;flex-direction:column;overflow:hidden;transform:translateX(calc(100% + 1rem));visibility:hidden;transition:transform .22s ease,visibility 0s .22s}
+.app.panel-open .panel{transform:none;visibility:visible;transition:transform .22s ease,visibility 0s}
+.ph{display:flex;align-items:center;gap:.6rem;padding:.55rem .8rem .55rem 1rem;border-bottom:.9px solid var(--line)}
+.ph b{font-size:1.05rem}
+.ph .hint{margin-left:auto}
+.btn.x{min-width:2.5rem;min-height:2.5rem;padding:0;font-size:1.3rem;line-height:1}
+.accs{overflow-y:auto;flex:1}
+.acc{border-bottom:.9px solid var(--line)}
+.acc-h{width:100%;display:flex;align-items:center;gap:.6rem;min-height:3.1rem;padding:.4rem 1rem;border:0;background:transparent;color:var(--ink);font-size:.95rem;text-align:left;cursor:pointer}
+.acc-h b{font-size:.98rem;white-space:nowrap}
+.acc-h .sum{margin-left:auto;color:var(--ink2);font-size:.82rem;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.acc-h .chev{width:.55rem;height:.55rem;border-right:2px solid var(--indigo);border-bottom:2px solid var(--indigo);transform:rotate(45deg) translateY(-.1rem);flex:none;margin-left:.3rem;transition:transform .15s}
+.acc.open .acc-h .sum{visibility:hidden}
+.acc.open .acc-h .chev{transform:rotate(-135deg) translateY(-.1rem)}
+.acc.open{background:#FBFAF7}
+.acc-h:focus-visible{outline:2px solid var(--indigo);outline-offset:-2px}
+.acc-b{padding:.1rem 1rem 1rem}
+.acc:not(.open) .acc-b{display:none}
+.acc-b h3{margin:.7rem 0 .3rem;font-size:.92rem;display:flex;align-items:center;gap:.45rem}
+.acc-b h3:first-child{margin-top:.2rem}
+
+/* 控制 */
+.row{display:flex;align-items:center;gap:.5rem;margin:.45rem 0;flex-wrap:wrap}
+.row>label{min-width:2.8rem;color:var(--ink2);font-size:.9rem}
+.btn{min-height:2.75rem;min-width:2.75rem;padding:0 .9rem;border:.9px solid var(--line);border-radius:.7rem;background:#fff;color:var(--ink);font-size:.95rem;cursor:pointer}
+.btn:active{background:var(--indigo-soft)}
+.btn.primary{background:var(--indigo);border-color:var(--indigo);color:#fff;font-weight:700}
+.btn.primary:active{background:#323b73}
+.btn.on{background:var(--indigo-soft);border-color:var(--indigo);color:var(--indigo);font-weight:700}
+.pill.btn{min-height:2.5rem;padding:0 1rem}
+input[type=date],select{min-height:2.75rem;border:.9px solid var(--line);border-radius:.7rem;padding:0 .6rem;font-size:.95rem;background:#fff;color:var(--ink);min-width:0}
+input[type=date]{flex:1}
+select{flex:1}
+input[type=range]{height:2.4rem;accent-color:var(--indigo)}
+.seg{display:inline-flex;border:.9px solid var(--line);border-radius:.7rem;overflow:hidden}
+.seg button{min-height:2.5rem;padding:0 .9rem;border:0;border-right:.9px solid var(--line);background:#fff;color:var(--ink);font-size:.95rem;cursor:pointer;white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--indigo-soft);color:var(--indigo);font-weight:700}
+.toggles{display:flex;flex-wrap:wrap;gap:.5rem}
+.switch{display:inline-flex;align-items:center;gap:.5rem;min-height:2.75rem;cursor:pointer;font-size:.92rem;margin-top:.5rem}
+.switch input{width:1.25rem;height:1.25rem;accent-color:var(--indigo)}
+.hint{font-size:.78rem;color:var(--ink2)}
+.note{margin:.5rem 0 0;font-size:.82rem;color:var(--ink2);border:.9px dashed var(--dash);border-radius:.7rem;padding:.5rem .8rem;background:#fff}
+
+/* 讀數 */
+.kv{display:grid;grid-template-columns:auto 1fr;gap:.25rem .9rem;margin:0}
+.kv dt{color:var(--ink2);font-size:.9rem}
+.kv dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:0 .55rem;border-radius:999px;font-size:.82rem;font-weight:400;border:.9px solid}
+.badge.up{background:var(--amber-soft);border-color:var(--amber);color:#7A4E08}
+.badge.down{background:#fff;border-style:dashed;border-color:var(--dash);color:var(--ink2)}
+
+
+/* 量測模式 */
+.task{position:absolute;left:.75rem;top:4.1rem;width:min(22rem,calc(100% - 1.5rem));max-height:calc(100% - 11.5rem);overflow:auto;display:none;
+  background:rgba(247,246,243,.97);border:.9px solid var(--line);border-radius:12px;padding:.7rem .9rem}
+body.meas #task,body.lab #lab,body.season #season{display:block}
+body.meas .info,body.meas #viewSeg,body.meas #camRow,body.meas .pip{display:none !important}
+@media (max-width:1180px){.task{max-height:calc(100% - 12rem)}}
+.task .th{display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+.task .th b{font-size:1rem}
+.task p{margin:.4rem 0;font-size:.9rem}
+.task .row{margin:.4rem 0;gap:.4rem}
+.btn.sm{min-height:2.4rem;min-width:2.4rem;padding:0 .75rem;font-size:.88rem}
+.aim{font-size:.95rem;margin:.4rem 0;padding:.35rem .6rem;border:.9px dashed var(--dash);border-radius:.6rem;background:#fff}
+.aim b{font-size:1.1rem;font-variant-numeric:tabular-nums}
+.task ul{list-style:none;margin:.3rem 0;padding:0;font-size:.85rem;font-variant-numeric:tabular-nums}
+.task li{padding:.15rem 0;border-bottom:.9px dotted var(--line)}
+.tmsg{min-height:1.2rem;color:#7A3A10}
+.tmsg.ok{color:#1F6B3A;font-weight:700}
+.task .nav{justify-content:space-between}
+.btn:disabled{opacity:.4;cursor:default}
+
+.task .th{cursor:pointer}
+.task .th .chev{width:.5rem;height:.5rem;border-right:2px solid var(--indigo);border-bottom:2px solid var(--indigo);transform:rotate(-135deg) translateY(-.1rem);flex:none;margin-left:.2rem}
+.task.min .th .chev{transform:rotate(45deg) translateY(-.1rem)}
+.task.min>*:not(.th){display:none}
+
+/* 手機（窄螢幕） */
+.seg .sm{display:none}
+@media (max-width:620px){
+  .seg .lg{display:none}.seg .sm{display:inline}
+  .topbar{grid-template-columns:1fr;grid-template-areas:"t" "c";row-gap:.4rem}
+  .hud.r{grid-area:t;justify-self:start;font-size:1rem}
+  .topctl{grid-area:c;justify-self:stretch;justify-content:space-between}
+  .topctl .seg button{padding:0 .8rem}
+  .info{top:6.4rem}
+  .task{top:6.4rem;max-height:calc(100% - 15rem)}
+  .pip{top:6.4rem}
+  .panel{top:6.4rem}
+  .floatL{left:.5rem;padding:.3rem .45rem}
+  .bar{padding:.3rem .8rem;gap:.55rem}
+}
+
+/* 月相與月出 */
+.labtbl{width:100%;border-collapse:collapse;font-size:.82rem;font-variant-numeric:tabular-nums;margin:.2rem 0}
+.labtbl th{font-weight:600;color:#6b6a64;text-align:left;padding:.15rem .2rem;border-bottom:.9px solid var(--line);font-size:.75rem}
+.labtbl td{padding:.28rem .2rem;border-bottom:.9px dotted var(--line);cursor:pointer}
+.labtbl tr.cur td{background:#E8E9F5;font-weight:700}
+.labtbl .em{font-size:1.15rem;line-height:1}
+.labtbl .dl{color:#a0661b}
+body.lab .meas-only{display:none}
+@media (max-width:620px){.topctl .seg button{padding:0 .55rem}.labtbl{font-size:.76rem}}
+body.lab .info{display:none !important}
+
+/* 太陽與四季 */
+body.season .info{display:none !important}
+#orbRow{display:none;bottom:4.6rem}
+body.orb #orbRow{display:flex}
+body:not(.season) #camSeg [data-cam=o]{display:none}
+@media (max-width:1180px){#orbRow{bottom:9.4rem}}
+.app.panel-open #orbRow{bottom:9.4rem}
+@media (max-width:620px){#orbRow,.app.panel-open #orbRow{bottom:9.6rem}}
+.labtbl .sw{display:inline-block;width:.7rem;height:.7rem;border-radius:50%;margin-right:.25rem;vertical-align:-1px}
+@media (max-width:620px){.topctl .seg button{padding:0 .42rem;font-size:.86rem}.topctl{gap:.3rem}}
+@media (max-width:1400px) and (min-width:621px){#modeSeg .lg{display:none}#modeSeg .sm{display:inline}}
+@media (max-width:620px){body.season .pip,body.lab .pip{display:none !important}}
+
+/* 步驟 6：分享與掃描 */
+#qrBtn{font-weight:700}
+@media (max-width:620px){#qrBtn{display:none}}
+.modal{position:fixed;inset:0;z-index:60;background:rgba(10,16,48,.55);display:flex;align-items:center;justify-content:center;padding:.75rem}
+.modal[hidden],.qrbig[hidden],.toast[hidden]{display:none}
+.mbox{width:min(46rem,100%);max-height:94vh;overflow:auto;background:#F7F6F3;border:.9px solid var(--line);border-radius:14px;padding:.8rem 1rem 1rem}
+.mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
+.mh b{font-size:1.1rem}
+.tabs{display:flex;gap:.35rem;margin:.3rem 0 .6rem;flex-wrap:wrap}
+.tabs button{border:.9px solid var(--line);background:#fff;border-radius:999px;padding:.35rem .9rem;font:inherit;cursor:pointer;min-height:2.4rem}
+.tabs button.on{background:#E8E9F5;border-color:#3D4A8F;color:#2E3A7E;font-weight:700}
+.baserow{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin-bottom:.5rem;font-size:.9rem}
+.baserow input{flex:1;min-width:12rem;min-height:2.2rem;border:.9px solid var(--line);border-radius:.5rem;padding:0 .5rem;font:inherit}
+.warn{flex-basis:100%;margin:0;color:#A5471B;font-size:.85rem}
+.warn:empty{display:none}
+.modal [data-p]{display:none}
+.modal.t-mine [data-p=mine],.modal.t-presets [data-p=presets],.modal.t-scan [data-p=scan]{display:block}
+.qrbox{display:flex;justify-content:center;margin:.3rem 0}
+.qrbox canvas{width:min(20rem,80vw);height:auto;image-rendering:pixelated;border:.9px solid var(--line);border-radius:8px;background:#fff}
+.urlline{word-break:break-all;font-size:.75rem}
+.modal .row{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin:.4rem 0}
+.modal .row label{font-size:.9rem}
+.modal select,.modal input[type=date],.modal #scanPaste{min-height:2.2rem;border:.9px solid var(--line);border-radius:.5rem;padding:0 .4rem;font:inherit}
+.modal #scanPaste{flex:1;min-width:10rem}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(10.5rem,1fr));gap:.6rem}
+.pcard{border:.9px solid var(--line);border-radius:10px;background:#fff;padding:.5rem;text-align:center;cursor:pointer}
+.pcard b{display:block;font-size:.9rem}
+.pcard span{display:block;font-size:.75rem;color:var(--ink2);min-height:2em}
+.pcard canvas{width:100%;height:auto;image-rendering:pixelated}
+.vwrap{background:#111;border-radius:10px;overflow:hidden;min-height:8rem;display:flex;justify-content:center}
+.vwrap video{width:100%;max-height:50vh;object-fit:contain}
+.filebtn{display:inline-flex;align-items:center;cursor:pointer}
+.qrbig{position:fixed;inset:0;z-index:70;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;cursor:zoom-out}
+.qrbig canvas{image-rendering:pixelated}
+.qrbig p{margin:0;font-size:1.2rem;font-weight:700;text-align:center;padding:0 1rem}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:5.5rem;z-index:55;display:flex;gap:.5rem;align-items:center;background:#1E2230;color:#fff;border-radius:999px;padding:.4rem .5rem .4rem 1rem;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.toast .btn{min-height:2.2rem}
+@media print{
+  body>*:not(#shareModal){display:none!important}
+  #shareModal{position:static!important;background:none!important;display:block!important;padding:0}
+  .mbox{max-height:none!important;overflow:visible!important;border:0!important;background:#fff!important;width:auto!important}
+  .mh,.tabs,.baserow .warn,.modal .row,.modal .hint,.modal [data-p]:not([data-p=presets]){display:none!important}
+  .modal [data-p=presets]{display:block!important}
+  .pgrid{grid-template-columns:repeat(3,1fr)}
+  .pcard{break-inside:avoid;border:1px solid #999}
+}
+@media (max-width:1700px){html.big #qrBtn{display:none}}
+@media (max-width:1500px){html.big .topctl{gap:.3rem}html.big .topctl .seg button{padding:0 .55rem;font-size:.85rem}html.big #panelBtn{padding:0 .6rem}}
+
+/* 地面視角：鏡頭列放在轉向列上方 */
+#gcamRow{bottom:4.6rem}
+@media (max-width:1100px){#gcamRow{bottom:9.2rem}}
+.app.panel-open #gcamRow{bottom:9.2rem}
+/* 三個視角按鈕：螢幕不夠寬時用短標籤（人／地面／太空） */
+@media (max-width:1400px) and (min-width:621px){#viewSeg .lg{display:none}#viewSeg .sm{display:inline}}
+@media (max-width:820px){#qrBtn{display:none}}
+/* 手機橫放（高度很矮）：隱藏小視窗和第二行提示，鏡頭列移到右邊，把空間讓給畫面 */
+@media (max-height:500px) and (orientation:landscape){
+  .pip{display:none !important}
+  #gcamRow{left:auto;right:.5rem;bottom:5.6rem}
+  .app.panel-open #gcamRow{right:calc(var(--pw) + 1rem)}
+}
+@media (max-height:500px) and (orientation:landscape){
+  .bar{bottom:.4rem;padding:.15rem .6rem;min-height:2.9rem}
+  .bar .btn,.bar .speed button{min-height:2.1rem}
+  .bar .time{font-size:1.2rem}
+  .floatL,.floatR,#gcamRow{bottom:3.9rem}
+  #gcamRow{bottom:3.9rem}
+  body.sv .info{display:none}
+}
+
+/* 基本／進階 */
+.lvrow{display:flex;align-items:center;gap:.6rem;padding:.55rem 1rem;border-bottom:.9px solid var(--line)}
+.lvrow>span{color:var(--ink2);font-size:.9rem}
+.lvrow .hint{margin-left:auto}
+
+.seg button[hidden],.row[hidden]{display:none !important}
+.app.panel-open .drag-hint{display:none}
+
+/* ---- 操作導覽 ---- */
+.tour{position:fixed;inset:0;z-index:90;pointer-events:none}
+.tour[hidden],.tour-ask[hidden]{display:none}
+.tour-sh{position:fixed;background:rgba(12,16,40,.66);pointer-events:auto}
+.tour-ring{position:fixed;border:3px solid #FFC93C;border-radius:14px;pointer-events:none;animation:tpulse 1.6s ease-in-out infinite}
+@keyframes tpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,201,60,.55)}50%{box-shadow:0 0 0 8px rgba(255,201,60,0)}}
+.tour-dot{position:fixed;width:2.6rem;height:2.6rem;margin:-1.3rem 0 0 -1.3rem;border-radius:50%;background:rgba(255,201,60,.85);border:3px solid #fff;pointer-events:none;animation:tdrag 1.8s ease-in-out infinite}
+@keyframes tdrag{0%,100%{transform:translateX(-4rem)}50%{transform:translateX(4rem)}}
+.tour-card{position:fixed;pointer-events:auto;width:min(21rem,calc(100vw - 1.5rem));background:#F7F6F3;border:.9px solid var(--line);border-radius:18px;padding:.9rem 1rem;display:flex;flex-direction:column;gap:.55rem}
+.tour-n{font-size:.85rem;color:var(--ink2)}
+.tour-t{margin:0;font-size:1.2rem;font-weight:700;line-height:1.5}
+.tour-done{font-weight:700;color:#2E7D4F}
+.tour-btns{display:flex;gap:.6rem;justify-content:flex-end}
+.tour-b{min-height:2.75rem;min-width:5.5rem;padding:0 1.1rem;border-radius:999px;border:.9px solid #3B45A8;background:#3B45A8;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.tour-b.ghost{background:#fff;color:#1E2230;border-color:var(--line)}
+.tour-b:focus-visible{outline:3px solid #FFC93C;outline-offset:2px}
+.tour-ask{position:fixed;inset:0;z-index:95;background:rgba(12,16,40,.45);display:flex;align-items:center;justify-content:center;padding:1rem}
+.tour-askc{background:#F7F6F3;border:.9px solid var(--line);border-radius:20px;padding:1.2rem 1.3rem;width:min(22rem,100%);display:flex;flex-direction:column;gap:.7rem}
+.tour-askc b{font-size:1.35rem}
+.tour-askc p{margin:0;font-size:1.1rem}
+body.touring .drag-hint{display:none}
+@media (prefers-reduced-motion:reduce){.tour-ring,.tour-dot{animation:none}.tour-dot{transform:none}}
+@media (max-height:480px){.tour-card{width:min(17rem,calc(100vw - 1.5rem));padding:.6rem .8rem;gap:.35rem}.tour-t{font-size:1.05rem}.tour-b{min-height:2.5rem}}
+
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="skywrap" id="skywrap">
+    <canvas id="sky" role="img" aria-label="主畫面：人的視角或太空視角，可拖曳轉動"></canvas>
+    <canvas id="pip" class="pip" role="button" tabindex="0" aria-label="小視窗：點一下與主畫面互換；按 C 換小視窗內容"></canvas>
+  </div>
+
+  <div class="topbar">
+    <button class="hud r" id="hudTime" aria-haspopup="dialog" aria-expanded="false" aria-controls="dtPop" title="點一下調整日期與時間"></button>
+    <div class="topctl">
+      <div class="seg" id="modeSeg"><button data-m="sky"><span class="lg">太陽與月亮</span><span class="sm">日月</span></button><button data-m="moon"><span class="lg">月相與月出</span><span class="sm">月相</span></button><button data-m="season"><span class="lg">太陽與四季</span><span class="sm">四季</span></button></div>
+      <div class="seg" id="viewSeg"><button data-v="g"><span class="lg">地面視角</span><span class="sm">地面</span></button><button data-v="p"><span class="lg">人的視角</span><span class="sm">人</span></button><button data-v="s"><span class="lg">太空視角</span><span class="sm">太空</span></button></div>
+      <button class="btn pill" id="qrBtn" aria-label="分享與掃描 QR code">QR</button>
+      <button class="btn pill" id="panelBtn" aria-expanded="false" aria-controls="panel">☰ 面板</button>
+    </div>
+  </div>
+
+  <div class="dtpop" id="dtPop" role="dialog" aria-label="調整日期與時間" hidden>
+    <div class="row"><b>日期與時間</b><button class="btn x" id="dtClose" aria-label="關閉">×</button></div>
+    <div class="row">
+      <button class="btn" id="mPrev" aria-label="前一個月">«</button>
+      <button class="btn" id="dPrev" aria-label="前一天">‹</button>
+      <input type="date" id="date" aria-label="日期">
+      <button class="btn" id="dNext" aria-label="後一天">›</button>
+      <button class="btn" id="mNext" aria-label="後一個月">»</button>
+    </div>
+    <div class="row"><span class="hint">時間</span><b class="time2" id="timeLabel2"></b><input type="range" id="slider2" min="0" max="1439" step="1" aria-label="一天中的時間"></div>
+    <div class="row"><label for="loc">地點</label><select id="loc"></select><button class="btn" id="now">回到現在</button></div>
+  </div>
+  <div class="drag-hint" id="dragHint" role="status"></div>
+
+  <div class="info" id="hudInfo">
+    <div class="il"><span class="dot sun"></span><b>太陽</b><span id="infoSun"></span></div>
+    <div class="il"><span class="dot moon"></span><b>月亮</b><span id="infoMoon"></span></div>
+    <div class="il sub" id="infoPhase"></div>
+  </div>
+
+  <aside class="task" id="task" aria-label="任務卡">
+    <div class="th" role="button" tabindex="0" aria-expanded="true" title="點一下收合或展開"><b id="taskTitle"></b><span id="taskStep" class="hint"></span><span class="chev" aria-hidden="true"></span></div>
+    <p id="taskText"></p>
+    <div class="row" id="taskTime"><span class="hint">時間</span><button class="btn sm" data-min="540">9:00</button><button class="btn sm" data-min="720">12:00</button><button class="btn sm" data-min="900">15:00</button></div>
+    <div class="row" id="taskDir"><span class="hint">方向</span><button class="btn sm" data-d="90">東</button><button class="btn sm" data-d="180">南</button><button class="btn sm" data-d="270">西</button><button class="btn sm" data-d="0">北</button></div>
+    <div class="aim" id="aimRow">方位 <b id="aimAz">—</b>　高度角 <b id="aimAlt">—</b></div>
+    <ul id="taskLog"></ul>
+    <p id="taskMsg" class="tmsg" role="status"></p>
+    <div class="row">
+      <button class="btn primary sm" id="taskRec">記下來</button>
+      <button class="btn sm" id="taskMoon">幫我找月亮</button>
+      <button class="btn sm" id="taskAns">看答案</button>
+    </div>
+    <div class="row nav"><button class="btn sm" id="taskPrev" aria-label="上一個任務">‹ 上一個</button><button class="btn sm" id="taskNext" aria-label="下一個任務">下一個 ›</button></div>
+  </aside>
+
+  <div class="floatL" id="facingRow">
+    <span>轉向</span>
+    <button class="btn" data-face="0">北</button>
+    <button class="btn" data-face="90">東</button>
+    <button class="btn" data-face="180">南</button>
+    <button class="btn" data-face="270">西</button>
+  </div>
+  <div class="floatL" id="gcamRow">
+    <span>鏡頭</span>
+    <button class="btn" data-rel="0">背後</button>
+    <button class="btn" data-rel="90">左邊</button>
+    <button class="btn" data-rel="180">正面</button>
+    <button class="btn" data-rel="270">右邊</button>
+  </div>
+  <div class="floatR" id="camRow">
+    <span>相機</span>
+    <div class="seg" id="camSeg"><button data-cam="d3">立體</button><button data-cam="tb">課本視角</button><button data-cam="o">繞日</button></div>
+  </div>
+
+  <div class="floatR" id="orbRow">
+    <span>觀察角度</span>
+    <div class="seg" id="orbSeg"><button data-e="12">側看</button><button data-e="30">斜看</button><button data-e="70">上看</button></div>
+  </div>
+
+  <div class="bar" id="bar">
+    <button class="btn primary round" id="play">▶ 播放</button>
+    <span class="time" id="timeLabel">--:--</span>
+    <input type="range" id="slider" min="0" max="1439" step="1" aria-label="一天中的時間">
+    <div class="seg speed" id="speed" aria-label="播放速度"><button data-s="10">慢</button><button data-s="60">中</button><button data-s="240">快</button></div>
+    <span class="hint" id="speedHint"></span>
+  </div>
+
+  <aside class="task labc" id="lab" aria-label="月相與月出時間">
+    <div class="th" role="button" tabindex="0" aria-expanded="true" title="點一下收合或展開"><b>月相與月出時間</b><span class="chev" aria-hidden="true"></span></div>
+    <p class="hint" style="margin:.3rem 0">① 按下面四個月相，看傍晚 18:00 的月亮</p>
+    <div class="row" id="labJump"><button class="btn sm" data-ph="0">🌑 新月</button><button class="btn sm" data-ph="90">🌓 上弦</button><button class="btn sm" data-ph="180">🌕 滿月</button><button class="btn sm" data-ph="270">🌗 下弦</button></div>
+    <div class="aim" id="labNow"></div>
+    <p class="hint" style="margin:.3rem 0">② 看這 7 天：月亮每天幾點出來？點一列可以跳到那一天</p>
+    <table class="labtbl" id="labTbl"></table>
+    <div class="row"><button class="btn primary sm" id="labAns">看答案</button></div>
+    <p id="labMsg" class="tmsg" role="status"></p>
+  </aside>
+  <aside class="task labc" id="season" aria-label="太陽與四季">
+    <div class="th" role="button" tabindex="0" aria-expanded="true" title="點一下收合或展開"><b>太陽與四季</b><span class="chev" aria-hidden="true"></span></div>
+    <p class="hint" style="margin:.3rem 0">① 按下面四個節氣，看太陽的路線怎麼變</p>
+    <div class="row" id="seaJump"><button class="btn sm" data-i="0">春分</button><button class="btn sm" data-i="1">夏至</button><button class="btn sm" data-i="2">秋分</button><button class="btn sm" data-i="3">冬至</button></div>
+    <input type="range" id="seaSlider" min="0" max="364" step="1" aria-label="一年中的日期" style="width:100%">
+    <p class="hint" style="margin:.3rem 0">也可以按畫面下方的「播放一年」。想看地球繞太陽：按上方「太空」，再選「繞日」</p>
+    <div class="aim" id="seaNow"></div>
+    <p class="hint" style="margin:.3rem 0">② 比較三條路線（人的視角）：夏天、春秋分、冬天</p>
+    <table class="labtbl" id="seaTbl"></table>
+    <div class="row"><button class="btn primary sm" id="seaAns">看答案</button></div>
+    <p id="seaMsg" class="tmsg" role="status"></p>
+  </aside>
+  <aside class="panel" id="panel" aria-label="設定面板" inert>
+    <header class="ph"><b>面板</b><span class="hint">一次展開一項，點標題切換</span><button class="btn x" id="panelClose" aria-label="關閉面板">×</button></header>
+    <div class="lvrow" id="taskSwRow"><label class="switch"><input type="checkbox" id="taskSw">量測任務</label><span class="hint">量太陽、月亮的方位與高度角</span></div>
+    <div class="lvrow" id="tourRow"><button class="btn" id="tourStart">▶ 操作導覽</button><span class="hint">1 分鐘學會怎麼操作</span></div>
+    <div class="accs">
+      <section class="acc" data-acc="view">
+        <button class="acc-h" aria-expanded="false"><b>畫面與說明</b><span class="sum" id="sumView"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="acc-b">
+          <div class="row" id="pipRow"><label>小視窗</label><button class="btn" id="tPip">顯示</button><span class="hint">點小視窗與主畫面互換；點「換成…」換小視窗內容</span></div>
+          <p class="note" id="note1">點畫面邊緣的「太陽」「月亮」標籤，會直接轉過去。日月大小是示意放大。</p>
+          <p class="note" id="note3">天空圓頂是示意圖：太陽、月亮離我們非常遠，這裡只畫方向。地面是半透明的，地平線下的日月會淡淡顯示在下方。</p>
+          <p class="note" id="note2">地球與月球的大小比例是真實的，但月球距離縮短，太陽固定畫在右邊。按「課本視角」會轉成課本上的俯視圖。</p>
+        </div>
+      </section>
+
+      <section class="acc" data-acc="show">
+        <button class="acc-h" aria-expanded="false"><b>顯示</b><span class="sum" id="sumShow"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="acc-b">
+          <div class="toggles">
+            <button class="btn" id="tGrid">格線</button>
+            <button class="btn" id="tTrail">今日軌跡</button>
+            <button class="btn" id="tSight">視線</button>
+          </div>
+          <label class="switch"><input type="checkbox" id="big">投影放大（字和按鈕放大）</label>
+        </div>
+      </section>
+
+      <section class="acc" data-acc="day">
+        <button class="acc-h" aria-expanded="false"><b>這一天的日出日落</b><span class="sum" id="sumDay"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="acc-b">
+          <dl class="kv">
+            <dt>日出</dt><dd id="sunRise"></dd>
+            <dt>日落</dt><dd id="sunSet"></dd>
+            <dt>白天長</dt><dd id="dayLen"></dd>
+            <dt>月出</dt><dd id="moonRise"></dd>
+            <dt>月沒</dt><dd id="moonSet"></dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="acc" data-acc="share">
+        <button class="acc-h" aria-expanded="false"><b>分享與掃描</b><span class="sum">QR</span><span class="chev" aria-hidden="true"></span></button>
+        <div class="acc-b">
+          <div class="toggles">
+            <button class="btn" id="openMine">我的畫面 QR</button>
+            <button class="btn" id="openPresets">預設題目 QR</button>
+            <button class="btn" id="openScan">掃描學生</button>
+          </div>
+          <p class="hint" style="margin:.4rem 0 0">學生出示「我的畫面」，老師「掃描」就能投影；老師用「預設題目」發給全班起點。</p>
+        </div>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<div class="modal" id="shareModal" role="dialog" aria-modal="true" aria-labelledby="shareTitle" hidden>
+  <div class="mbox">
+    <header class="mh"><b id="shareTitle">分享與掃描</b><button class="btn x" id="shareClose" aria-label="關閉">×</button></header>
+    <div class="tabs" role="tablist"><button data-t="mine" role="tab">我的畫面</button><button data-t="presets" role="tab">預設題目</button><button data-t="scan" role="tab">掃描學生</button></div>
+    <div class="baserow"><label for="baseUrl">網站網址</label><input id="baseUrl" type="url" placeholder="https://帳號.github.io/專案名/" autocomplete="off"><p class="warn" id="baseWarn"></p></div>
+    <section data-p="mine">
+      <div class="qrbox"><canvas id="qrMine" aria-label="目前畫面的 QR code"></canvas></div>
+      <p class="hint urlline" id="qrMineUrl"></p>
+      <div class="row"><button class="btn sm" id="qrCopy">複製連結</button><button class="btn sm" id="qrMineBig">放大投影</button></div>
+      <p class="hint">這個 QR code 記住你現在看到的畫面。老師用「掃描學生」掃它，就能把你的畫面投影到大螢幕。</p>
+    </section>
+    <section data-p="presets">
+      <div class="row"><label>地點 <select id="pLoc"></select></label><label>日期 <input type="date" id="pDate"></label><button class="btn sm" id="pPrint">列印</button></div>
+      <p class="hint">學生用平板或手機掃描，就會直接開到那一題的起點。點 QR code 可以放大投影。</p>
+      <div class="pgrid" id="pGrid"></div>
+    </section>
+    <section data-p="scan">
+      <div class="vwrap"><video id="scanVideo" playsinline muted></video></div>
+      <div class="row"><button class="btn sm primary" id="scanStart">開啟相機</button><button class="btn sm" id="scanStop">停止</button><label class="btn sm filebtn">用照片掃描<input type="file" id="scanFile" accept="image/*" hidden></label></div>
+      <p class="tmsg" id="scanMsg" role="status"></p>
+      <label class="switch"><input type="checkbox" id="scanBig" checked>載入後切成投影模式（字和按鈕放大）</label>
+      <div class="row"><input id="scanPaste" type="text" placeholder="或貼上學生的連結" aria-label="貼上學生的連結"><button class="btn sm" id="scanLoad">載入</button></div>
+    </section>
+  </div>
+</div>
+<div class="qrbig" id="qrBig" hidden><canvas id="qrBigCv"></canvas><p id="qrBigCap"></p></div>
+<div class="toast" id="toast" role="status" hidden><span id="toastTxt"></span><button class="btn sm" id="toastBack">回到我的畫面</button><button class="btn sm x" id="toastX" aria-label="關閉">×</button></div>
+
+<div class="tour" id="tour" hidden>
+  <div class="tour-sh" data-s="t"></div><div class="tour-sh" data-s="b"></div><div class="tour-sh" data-s="l"></div><div class="tour-sh" data-s="r"></div>
+  <div class="tour-ring" id="tourRing"></div>
+  <div class="tour-dot" id="tourDot"></div>
+  <div class="tour-card" id="tourCard" role="dialog" aria-labelledby="tourText" aria-live="polite">
+    <div class="tour-n" id="tourN"></div>
+    <p class="tour-t" id="tourText"></p>
+    <div class="tour-done" id="tourDone" hidden>做到了 ✓</div>
+    <div class="tour-btns"><button class="tour-b ghost" id="tourExit">離開導覽</button><button class="tour-b" id="tourNext">下一步</button></div>
+  </div>
+</div>
+<div class="tour-ask" id="tourAsk" hidden>
+  <div class="tour-askc" role="dialog" aria-modal="true" aria-labelledby="tourAskT">
+    <b id="tourAskT">第一次來嗎？</b>
+    <p>要不要花 1 分鐘，學會怎麼操作？</p>
+    <div class="tour-btns"><button class="tour-b ghost" id="tourAskNo">我自己玩</button><button class="tour-b" id="tourAskYes">開始導覽</button></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+ * 天文計算層（SkyAstro）
+ * 太陽、月亮位置、月相、日出日落、月出月沒、農曆日期
+ * 演算法：Meeus《Astronomical Algorithms》低精度太陽 + 月球主要級數
+ * 時間：以 UTC 毫秒為唯一時間來源；顯示一律用臺灣時間 UTC+8
+ * ============================================================ */
+const SkyAstro = (() => {
+  'use strict';
+  const RAD = Math.PI / 180, DEG = 180 / Math.PI;
+  const TZ_MS = 8 * 3600 * 1000;
+  const DELTA_T = 69; // TT - UT（秒），2026 年約 69 秒
+  const n360 = x => ((x % 360) + 360) % 360;
+  const wrap180 = x => ((((x + 180) % 360) + 360) % 360) - 180;
+
+  /* ---------- 時間工具 ---------- */
+  const jdUT = ms => ms / 86400000 + 2440587.5;
+  const Tcent = ms => (jdUT(ms) + DELTA_T / 86400 - 2451545.0) / 36525;
+  const gmstDeg = ms => {
+    const d = jdUT(ms) - 2451545.0, T = d / 36525;
+    return n360(280.46061837 + 360.98564736629 * d + 0.000387933 * T * T - T * T * T / 38710000);
+  };
+  const obliq = T => (23.439291111 - 0.0130041667 * T) * RAD;
+  const pad = n => String(n).padStart(2, '0');
+
+  function localParts(ms) {
+    const d = new Date(ms + TZ_MS);
+    return {
+      y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(),
+      min: d.getUTCHours() * 60 + d.getUTCMinutes(), sec: d.getUTCSeconds(),
+      date: `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+    };
+  }
+  function msFromLocal(dateStr, min) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return Date.UTC(y, m - 1, d, 0, 0, 0) - TZ_MS + min * 60000;
+  }
+  const dayStartMs = ms => msFromLocal(localParts(ms).date, 0);
+  const fmtHM = min => `${pad(Math.floor(min / 60) % 24)}:${pad(Math.floor(min % 60))}`;
+  const fmtClock = ms => { const p = localParts(ms); return fmtHM(p.min); };
+
+  /* ---------- 太陽 ---------- */
+  function sunCoords(T) {
+    const L0 = n360(280.46646 + 36000.76983 * T + 0.0003032 * T * T);
+    const M = n360(357.52911 + 35999.05029 * T - 0.0001537 * T * T) * RAD;
+    const C = (1.914602 - 0.004817 * T) * Math.sin(M) + (0.019993 - 0.000101 * T) * Math.sin(2 * M) + 0.000289 * Math.sin(3 * M);
+    const om = (125.04 - 1934.136 * T) * RAD;
+    const lon = n360(L0 + C - 0.00569 - 0.00478 * Math.sin(om));
+    const e = 0.016708634 - 0.000042037 * T;
+    const nu = M + C * RAD;
+    const R = 1.000001018 * (1 - e * e) / (1 + e * Math.cos(nu)); // AU
+    const eps = obliq(T) + 0.00256 * RAD * Math.cos(om);
+    const l = lon * RAD;
+    return { lon, R, ra: Math.atan2(Math.cos(eps) * Math.sin(l), Math.cos(l)), dec: Math.asin(Math.sin(eps) * Math.sin(l)) };
+  }
+
+  /* ---------- 月亮（Meeus 第 47 章，取主要項） ---------- */
+  // [D, M, M', F, Σl(1e-6 度), Σr(1e-3 公里)]
+  const MOON_LR = [
+    [0,0,1,0,6288774,-20905355],[2,0,-1,0,1274027,-3699111],[2,0,0,0,658314,-2955968],[0,0,2,0,213618,-569925],
+    [0,1,0,0,-185116,48888],[0,0,0,2,-114332,-3149],[2,0,-2,0,58793,246158],[2,-1,-1,0,57066,-152138],
+    [2,0,1,0,53322,-170733],[2,-1,0,0,45758,-204586],[0,1,-1,0,-40923,-129620],[1,0,0,0,-34720,108743],
+    [0,1,1,0,-30383,104755],[2,0,0,-2,15327,10321],[0,0,1,2,-12528,0],[0,0,1,-2,10980,79661],
+    [4,0,-1,0,10675,-34782],[0,0,3,0,10034,-23210],[4,0,-2,0,8548,-21636],[2,1,-1,0,-7888,24208],
+    [2,1,0,0,-6766,30824],[1,0,-1,0,-5163,-8379],[1,1,0,0,4987,-16675],[2,-1,1,0,4036,-12831],
+    [2,0,2,0,3994,-10445],[4,0,0,0,3861,-11650],[2,0,-3,0,3665,14403],[0,1,-2,0,-2689,-7003],
+    [2,0,-1,2,-2602,0],[2,-1,-2,0,2390,10056],[1,0,1,0,-2348,6322],[2,-2,0,0,2236,-9884],
+    [0,1,2,0,-2120,5751],[0,2,0,0,-2069,0],[2,-2,-1,0,2048,-4950],[2,0,1,-2,-1773,4130],
+    [2,0,0,2,-1595,0],[4,-1,-1,0,1215,-3958],[0,0,2,2,-1110,0],[3,0,-1,0,-892,3258],
+    [2,1,1,0,-810,2616],[4,-1,-2,0,759,-1897],[0,2,-1,0,-713,-2117],[2,2,-1,0,-700,2354],
+    [2,1,-2,0,691,0],[2,-1,0,-2,596,0],[4,0,1,0,549,-1423],[0,0,4,0,537,-1117],
+    [4,-1,0,0,520,-1571],[1,0,-2,0,-487,-1739],[2,1,0,-2,-399,0],[0,0,2,-2,-381,-4421],
+    [1,1,1,0,351,0],[3,0,-2,0,-340,0],[4,0,-3,0,330,0],[2,-1,2,0,327,0],
+    [0,2,1,0,-323,1165],[1,1,-1,0,299,0],[2,0,3,0,294,0],[2,0,-1,-2,0,8752]
+  ];
+  // [D, M, M', F, Σb(1e-6 度)]
+  const MOON_B = [
+    [0,0,0,1,5128122],[0,0,1,1,280602],[0,0,1,-1,277693],[2,0,0,-1,173237],[2,0,-1,1,55413],[2,0,-1,-1,46271],
+    [2,0,0,1,32573],[0,0,2,1,17198],[2,0,1,-1,9266],[0,0,2,-1,8822],[2,-1,0,-1,8216],[2,0,-2,-1,4324],
+    [2,0,1,1,4200],[2,1,0,-1,-3359],[2,-1,-1,1,2463],[2,-1,0,1,2211],[2,-1,-1,-1,2065],[0,1,-1,-1,-1870],
+    [4,0,-1,-1,1828],[0,1,0,1,-1794],[0,0,0,3,-1749],[0,1,-1,1,-1565],[1,0,0,1,-1491],[0,1,1,1,-1475],
+    [0,1,1,-1,-1410],[0,1,0,-1,-1344],[1,0,0,-1,-1335],[0,0,3,1,1107],[4,0,0,-1,1021],[4,0,-1,1,833],
+    [0,0,1,-3,777],[4,0,-2,1,671],[2,0,0,-3,607],[2,0,2,-1,596],[2,-1,1,-1,491],[2,0,-2,1,-451],
+    [0,0,3,-1,439],[2,0,2,1,422],[2,0,-3,-1,421],[2,1,-1,1,-366],[2,1,0,1,-351],[4,0,0,1,331],
+    [2,-1,1,1,315],[2,-2,0,-1,302],[0,0,1,3,-283],[2,1,1,-1,-229],[1,1,0,-1,223],[1,1,0,1,223],
+    [0,1,-2,-1,-220],[2,1,-1,-1,-220],[1,0,1,1,-185],[2,-1,-2,-1,181],[0,1,2,1,-177],[4,0,-2,-1,176],
+    [4,-1,-1,-1,166],[1,0,1,-1,-164],[4,0,1,-1,132],[1,0,-1,-1,-119],[4,-1,0,-1,115],[2,-2,0,1,107]
+  ];
+  function moonCoords(T) {
+    const T2 = T * T, T3 = T2 * T;
+    const Lp = n360(218.3164477 + 481267.88123421 * T - 0.0015786 * T2 + T3 / 538841);
+    const D = n360(297.8501921 + 445267.1114034 * T - 0.0018819 * T2 + T3 / 545868) * RAD;
+    const M = n360(357.5291092 + 35999.0502909 * T - 0.0001536 * T2) * RAD;
+    const Mp = n360(134.9633964 + 477198.8675055 * T + 0.0087414 * T2 + T3 / 69699) * RAD;
+    const F = n360(93.2720950 + 483202.0175233 * T - 0.0036539 * T2 - T3 / 3526000) * RAD;
+    const A1 = n360(119.75 + 131.849 * T) * RAD, A2 = n360(53.09 + 479264.290 * T) * RAD, A3 = n360(313.45 + 481266.484 * T) * RAD;
+    const E = 1 - 0.002516 * T - 0.0000074 * T2;
+    const ef = m => (m === 0 ? 1 : Math.abs(m) === 1 ? E : E * E);
+    let sl = 0, sr = 0, sb = 0;
+    for (const [d, m, mp, f, l, r] of MOON_LR) {
+      const a = d * D + m * M + mp * Mp + f * F, e = ef(m);
+      sl += l * e * Math.sin(a); sr += r * e * Math.cos(a);
+    }
+    for (const [d, m, mp, f, b] of MOON_B) {
+      sb += b * ef(m) * Math.sin(d * D + m * M + mp * Mp + f * F);
+    }
+    const Lr = Lp * RAD;
+    sl += 3958 * Math.sin(A1) + 1962 * Math.sin(Lr - F) + 318 * Math.sin(A2);
+    sb += -2235 * Math.sin(Lr) + 382 * Math.sin(A3) + 175 * Math.sin(A1 - F) + 175 * Math.sin(A1 + F) + 127 * Math.sin(Lr - Mp) - 115 * Math.sin(Lr + Mp);
+    const om = (125.04 - 1934.136 * T) * RAD;
+    const lon = n360(Lp + sl / 1e6 - 0.00478 * Math.sin(om));
+    const lat = sb / 1e6;
+    const dist = 385000.56 + sr / 1000; // 公里
+    const eps = obliq(T) + 0.00256 * RAD * Math.cos(om);
+    const l = lon * RAD, b = lat * RAD;
+    return {
+      lon, lat, dist,
+      ra: Math.atan2(Math.sin(l) * Math.cos(eps) - Math.tan(b) * Math.sin(eps), Math.cos(l)),
+      dec: Math.asin(Math.sin(b) * Math.cos(eps) + Math.cos(b) * Math.sin(eps) * Math.sin(l))
+    };
+  }
+
+  /* ---------- 座標轉換 ---------- */
+  function toHorizontal(ra, dec, ms, latDeg, lonDeg) {
+    const H = (gmstDeg(ms) + lonDeg) * RAD - ra, phi = latDeg * RAD;
+    const alt = Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
+    const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(dec) * Math.cos(phi)) + Math.PI;
+    return { alt: alt * DEG, az: n360(az * DEG) }; // az：從正北順時針
+  }
+  // 大氣折射（度）：Saemundsson，輸入真高度
+  function refraction(h) {
+    if (h < -1.5) return 0;
+    const hh = Math.max(h, -1);
+    let R = 1.02 / Math.tan((hh + 10.3 / (hh + 5.11)) * RAD) / 60;
+    if (h < -1) R *= (h + 1.5) / 0.5;
+    return R;
+  }
+
+  /* ---------- 對外：太陽 / 月亮位置 ---------- */
+  function sunPos(ms, lat, lon) {
+    const c = sunCoords(Tcent(ms)), h = toHorizontal(c.ra, c.dec, ms, lat, lon);
+    return { az: h.az, altGeo: h.alt, alt: h.alt + refraction(h.alt), lon: c.lon, R: c.R, ra: c.ra, dec: c.dec };
+  }
+  function moonPos(ms, lat, lon) {
+    const T = Tcent(ms), c = moonCoords(T), s = sunCoords(T);
+    const h = toHorizontal(c.ra, c.dec, ms, lat, lon);
+    const par = Math.asin(6378.14 / c.dist) * DEG;               // 地平視差
+    const altTopo = h.alt - par * Math.cos(h.alt * RAD);          // 站心高度（幾何）
+    // 月相：太陽與月亮的黃經差 D，以及照亮比例 k
+    const D = n360(c.lon - s.lon);
+    const psi = Math.acos(Math.cos(c.lat * RAD) * Math.cos(D * RAD));
+    const Rs = s.R * 149597870.7;
+    const inc = Math.atan2(Rs * Math.sin(psi), c.dist - Rs * Math.cos(psi));
+    return {
+      az: h.az, altGeo: altTopo, alt: altTopo + refraction(altTopo),
+      dist: c.dist, D, k: (1 + Math.cos(inc)) / 2,
+      semiDiam: Math.asin(1737.4 / c.dist) * DEG,
+      ra: c.ra, dec: c.dec, altGeoc: h.alt
+    };
+  }
+
+  /* ---------- 月相名稱（依太陽月亮黃經差 D） ---------- */
+  function phaseName(D) {
+    if (D < 8 || D >= 352) return '新月（朔）';
+    if (D < 72) return '眉月';
+    if (D < 108) return '上弦月';
+    if (D < 172) return '盈凸月';
+    if (D < 188) return '滿月（望）';
+    if (D < 252) return '虧凸月';
+    if (D < 288) return '下弦月';
+    return '殘月';
+  }
+
+  /* ---------- 日出日落 / 月出月沒 ---------- */
+  function riseSet(body, startMs, lat, lon) {
+    const f = ms => {
+      if (body === 'sun') return sunPos(ms, lat, lon).altGeo + 0.8333;
+      const m = moonPos(ms, lat, lon);
+      return m.altGeo + 0.5667 + m.semiDiam;
+    };
+    const step = 5 * 60000, N = 24 * 12;
+    let t0 = startMs, f0 = f(t0), rise = null, set = null;
+    const root = (a, b, fa) => {
+      for (let i = 0; i < 24; i++) { const m = (a + b) / 2, fm = f(m); if ((fm < 0) === (fa < 0)) { a = m; fa = fm; } else b = m; }
+      return (a + b) / 2;
+    };
+    for (let i = 1; i <= N; i++) {
+      const t1 = startMs + i * step, f1 = f(t1);
+      if (f0 < 0 && f1 >= 0 && rise === null) rise = root(t0, t1, f0);
+      if (f0 >= 0 && f1 < 0 && set === null) set = root(t0, t1, f0);
+      t0 = t1; f0 = f1;
+    }
+    const at = ms => (ms === null ? null : (body === 'sun' ? sunPos(ms, lat, lon).az : moonPos(ms, lat, lon).az));
+    return { rise, set, riseAz: at(rise), setAz: at(set) };
+  }
+
+  /* ---------- 農曆（用瀏覽器內建曆法，以臺灣當地正午換算） ---------- */
+  const LUNAR_DAY = d => d <= 10 ? '初' + '一二三四五六七八九十'[d - 1]
+    : d < 20 ? '十' + '一二三四五六七八九'[d - 11]
+    : d === 20 ? '二十' : d < 30 ? '廿' + '一二三四五六七八九'[d - 21] : '三十';
+  const LUNAR_MON = ['正','二','三','四','五','六','七','八','九','十','十一','十二'];
+  let lunarFmt = null;
+  function lunar(ms) {
+    try {
+      if (!lunarFmt) lunarFmt = new Intl.DateTimeFormat('zh-TW-u-ca-chinese', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Taipei' });
+      const p = localParts(ms), noon = msFromLocal(p.date, 12 * 60);
+      const parts = lunarFmt.formatToParts(new Date(noon));
+      const mStr = parts.find(x => x.type === 'month').value, d = +parts.find(x => x.type === 'day').value;
+      const leap = /閏|bis/i.test(mStr), m = parseInt(mStr.replace(/\D/g, ''), 10);
+      return { month: m, day: d, leap, label: `${leap ? '閏' : ''}${LUNAR_MON[m - 1]}月${LUNAR_DAY(d)}` };
+    } catch (e) { return null; }
+  }
+
+  /* ---------- 其他工具 ---------- */
+  // 從 (alt1,az1) 看向 (alt2,az2) 的方向角：從「天頂方向」順時針量，單位度
+  function bearing(alt1, az1, alt2, az2) {
+    const p1 = alt1 * RAD, p2 = alt2 * RAD, dl = (az2 - az1) * RAD;
+    const y = Math.sin(dl) * Math.cos(p2), x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+    return n360(Math.atan2(y, x) * DEG);
+  }
+  // 黃道北極在赤道座標系中的單位向量（太空視角用）
+  const eclipticPole = ms => { const e = obliq(Tcent(ms)); return [0, -Math.sin(e), Math.cos(e)]; };
+  // 示意星點（隨恆星時真實轉動，不代表真實星座）
+  function makeStars(n = 260, seed = 20261116) {
+    let s = seed >>> 0;
+    const rnd = () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
+    const out = [];
+    for (let i = 0; i < n; i++) out.push({ ra: rnd() * 2 * Math.PI, dec: Math.asin(2 * rnd() - 1), b: Math.pow(rnd(), 3) });
+    return out;
+  }
+  const starAltAz = (st, ms, lat, lon) => toHorizontal(st.ra, st.dec, ms, lat, lon);
+
+  return { RAD, DEG, TZ_MS, n360, wrap180, localParts, msFromLocal, dayStartMs, fmtHM, fmtClock,
+           sunPos, moonPos, phaseName, riseSet, lunar, bearing, makeStars, starAltAz, eclipticPole, gmstRad: ms => gmstDeg(ms) * RAD };
+})();
+if (typeof module !== 'undefined') module.exports = SkyAstro;
+
+</script>
+<script>
+/* ============================================================
+ * 自寫 QR code：編碼（byte 模式，版本 1–20，L/M/Q/H）與解碼（影像→文字）
+ * 不依賴任何外部程式庫。解碼先找三個定位點，再用 RS 錯誤更正驗證。
+ * ============================================================ */
+const QR = (() => {
+  'use strict';
+  const ECC_PER_BLOCK = {
+    L: [-1, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18, 20, 24, 26, 30, 22, 24, 28, 30, 28, 28],
+    M: [-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26],
+    Q: [-1, 13, 22, 18, 26, 18, 24, 18, 22, 20, 24, 28, 26, 24, 20, 30, 24, 28, 28, 26, 30],
+    H: [-1, 17, 28, 22, 16, 22, 28, 26, 26, 24, 28, 24, 28, 22, 24, 24, 30, 28, 28, 26, 28]
+  };
+  const NUM_BLOCKS = {
+    L: [-1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 4, 4, 6, 6, 6, 6, 7, 8],
+    M: [-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16],
+    Q: [-1, 1, 1, 2, 2, 4, 4, 6, 6, 8, 8, 8, 10, 12, 16, 12, 17, 16, 18, 21, 20],
+    H: [-1, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25]
+  };
+  const FMT_BITS = { L: 1, M: 0, Q: 3, H: 2 }, FMT_NAME = ['M', 'L', 'H', 'Q'];
+  const MAX_VER = 20;
+
+  /* ---------- GF(256) ---------- */
+  const EXP = new Uint8Array(512), LOG = new Uint8Array(256);
+  (() => { let x = 1; for (let i = 0; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11D; } for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255]; })();
+  const gmul = (a, b) => (a === 0 || b === 0) ? 0 : EXP[LOG[a] + LOG[b]];
+  const gdiv = (a, b) => a === 0 ? 0 : EXP[(LOG[a] + 255 - LOG[b]) % 255];
+  const rsGen = deg => {
+    let r = [1];
+    for (let i = 0; i < deg; i++) { const n = new Array(r.length + 1).fill(0); for (let j = 0; j < r.length; j++) { n[j] ^= r[j]; n[j + 1] ^= gmul(r[j], EXP[i]); } r = n; }
+    return r;
+  };
+  const rsRem = (data, gen) => {
+    const deg = gen.length - 1, res = new Array(deg).fill(0);
+    for (const b of data) { const f = b ^ res.shift(); res.push(0); for (let i = 0; i < deg; i++) res[i] ^= gmul(gen[i + 1], f); }
+    return res;
+  };
+  // 錯誤更正：回傳更正後的陣列，失敗回傳 null
+  function rsCorrect(cw, nEcc) {
+    const n = cw.length, S = new Array(nEcc).fill(0);
+    let clean = true;
+    for (let i = 0; i < nEcc; i++) { let s = 0; for (let j = 0; j < n; j++) s = gmul(s, EXP[i]) ^ cw[j]; S[i] = s; if (s) clean = false; }
+    if (clean) return cw.slice();
+    // Berlekamp–Massey
+    let C = [1], B = [1], L = 0, m = 1, b = 1;
+    for (let i = 0; i < nEcc; i++) {
+      let d = S[i];
+      for (let j = 1; j <= L; j++) d ^= gmul(C[j] || 0, S[i - j]);
+      if (d === 0) { m++; continue; }
+      const T = C.slice(), coef = gdiv(d, b);
+      while (C.length < B.length + m) C.push(0);
+      for (let j = 0; j < B.length; j++) C[j + m] ^= gmul(coef, B[j]);
+      if (2 * L <= i) { L = i + 1 - L; B = T; b = d; m = 1; } else m++;
+    }
+    if (L * 2 > nEcc) return null;
+    // Chien 搜尋
+    const pos = [];
+    for (let p = 0; p < n; p++) {
+      const xinv = EXP[(255 - ((n - 1 - p) % 255)) % 255]; let v = 0, xp = 1;
+      for (let j = 0; j < C.length; j++) { v ^= gmul(C[j], xp); xp = gmul(xp, xinv); }
+      if (v === 0) pos.push(p);
+    }
+    if (pos.length !== L) return null;
+    // Forney
+    const omega = new Array(nEcc).fill(0);
+    for (let i = 0; i < nEcc; i++) for (let j = 0; j <= i && j < C.length; j++) omega[i] ^= gmul(C[j], S[i - j]);
+    const out = cw.slice();
+    for (const p of pos) {
+      const X = EXP[(n - 1 - p) % 255], xinv = EXP[(255 - ((n - 1 - p) % 255)) % 255];
+      let num = 0, xp = 1; for (let j = 0; j < nEcc; j++) { num ^= gmul(omega[j], xp); xp = gmul(xp, xinv); }
+      let den = 0; xp = 1; for (let j = 1; j < C.length; j += 2) { den ^= gmul(C[j], xp); xp = gmul(xp, gmul(xinv, xinv)); }
+      if (den === 0) return null;
+      out[p] ^= gmul(X, gdiv(num, den));
+    }
+    // 驗證
+    for (let i = 0; i < nEcc; i++) { let s = 0; for (let j = 0; j < n; j++) s = gmul(s, EXP[i]) ^ out[j]; if (s) return null; }
+    return out;
+  }
+
+  /* ---------- 版面 ---------- */
+  const rawModules = v => { let r = (16 * v + 128) * v + 64; if (v >= 2) { const na = Math.floor(v / 7) + 2; r -= (25 * na - 10) * na - 55; if (v >= 7) r -= 36; } return r; };
+  const dataCw = (v, e) => Math.floor(rawModules(v) / 8) - ECC_PER_BLOCK[e][v] * NUM_BLOCKS[e][v];
+  const alignPos = v => {
+    if (v === 1) return [];
+    const na = Math.floor(v / 7) + 2, size = v * 4 + 17, step = v === 32 ? 26 : Math.ceil((v * 4 + 4) / (na * 2 - 2)) * 2, r = [6];
+    for (let p = size - 7; r.length < na; p -= step) r.splice(1, 0, p);
+    return r;
+  };
+  const bitAt = (x, i) => ((x >>> i) & 1) !== 0;
+  function makeFunction(v) {
+    const size = v * 4 + 17, m = Array.from({ length: size }, () => new Uint8Array(size)), fn = Array.from({ length: size }, () => new Uint8Array(size));
+    const set = (x, y, d) => { m[y][x] = d ? 1 : 0; fn[y][x] = 1; };
+    for (let i = 0; i < size; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+    const finder = (cx, cy) => { for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { const d = Math.max(Math.abs(dx), Math.abs(dy)), x = cx + dx, y = cy + dy; if (x >= 0 && x < size && y >= 0 && y < size) set(x, y, d !== 2 && d !== 4); } };
+    finder(3, 3); finder(size - 4, 3); finder(3, size - 4);
+    const ap = alignPos(v), n = ap.length;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      if ((i === 0 && j === 0) || (i === 0 && j === n - 1) || (i === n - 1 && j === 0)) continue;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) set(ap[i] + dx, ap[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+    }
+    // 保留格式資訊位置（先填 0）
+    FMT1.forEach(([x, y]) => set(x, y, 0));
+    for (let i = 0; i < 15; i++) { const [x, y] = fmt2(size, i); set(x, y, 0); }
+    set(8, size - 8, 1);
+    if (v >= 7) {
+      let rem = v; for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+      const bits = (v << 12) | rem;
+      for (let i = 0; i < 18; i++) { const c = bitAt(bits, i), a = size - 11 + i % 3, b = Math.floor(i / 3); set(a, b, c); set(b, a, c); }
+    }
+    return { size, m, fn };
+  }
+  const FMT1 = [[8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8], [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8]];
+  const fmt2 = (size, i) => i < 8 ? [size - 1 - i, 8] : [8, size - 15 + i];
+  const fmtCode = (eclBits, mask) => { const d = (eclBits << 3) | mask; let rem = d; for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537); return ((d << 10) | rem) ^ 0x5412; };
+  const maskFn = [(x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, (x, y) => x % 3 === 0, (x, y) => (x + y) % 3 === 0,
+    (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => x * y % 2 + x * y % 3 === 0, (x, y) => (x * y % 2 + x * y % 3) % 2 === 0, (x, y) => ((x + y) % 2 + x * y % 3) % 2 === 0];
+  const zigzag = (size, fn, cb) => {
+    for (let right = size - 1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      for (let vert = 0; vert < size; vert++) for (let j = 0; j < 2; j++) {
+        const x = right - j, up = ((right + 1) & 2) === 0, y = up ? size - 1 - vert : vert;
+        if (!fn[y][x]) cb(x, y);
+      }
+    }
+  };
+
+  /* ---------- 編碼 ---------- */
+  function penalty(m, size) {
+    let r = 0, dark = 0;
+    for (let y = 0; y < size; y++) {
+      let run = 1;
+      for (let x = 1; x <= size; x++) { if (x < size && m[y][x] === m[y][x - 1]) run++; else { if (run >= 5) r += run - 2; run = 1; } }
+      for (let x = 0; x < size; x++) dark += m[y][x];
+    }
+    for (let x = 0; x < size; x++) { let run = 1; for (let y = 1; y <= size; y++) { if (y < size && m[y][x] === m[y - 1][x]) run++; else { if (run >= 5) r += run - 2; run = 1; } } }
+    for (let y = 0; y < size - 1; y++) for (let x = 0; x < size - 1; x++) { const c = m[y][x]; if (c === m[y][x + 1] && c === m[y + 1][x] && c === m[y + 1][x + 1]) r += 3; }
+    const P1 = [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0], P2 = [0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1];
+    for (let y = 0; y < size; y++) for (let x = 0; x + 11 <= size; x++) {
+      let a = true, b = true, c = true, d = true;
+      for (let k = 0; k < 11; k++) { if (m[y][x + k] !== P1[k]) a = false; if (m[y][x + k] !== P2[k]) b = false; if (m[x + k][y] !== P1[k]) c = false; if (m[x + k][y] !== P2[k]) d = false; }
+      r += 40 * ((a ? 1 : 0) + (b ? 1 : 0) + (c ? 1 : 0) + (d ? 1 : 0));
+    }
+    const k = Math.ceil(Math.abs(dark * 20 - size * size * 10) / (size * size)) - 1;
+    return r + k * 10;
+  }
+  function encode(text, ecl = 'M') {
+    const bytes = Array.from(new TextEncoder().encode(text));
+    let ver = 1, lenBits = 8;
+    for (; ver <= MAX_VER; ver++) { lenBits = ver <= 9 ? 8 : 16; if (4 + lenBits + bytes.length * 8 <= dataCw(ver, ecl) * 8) break; }
+    if (ver > MAX_VER) throw new Error('QR：資料太長');
+    const bits = []; const put = (val, n) => { for (let i = n - 1; i >= 0; i--) bits.push((val >>> i) & 1); };
+    put(4, 4); put(bytes.length, lenBits); bytes.forEach(b => put(b, 8));
+    const cap = dataCw(ver, ecl) * 8;
+    put(0, Math.min(4, cap - bits.length)); while (bits.length % 8) bits.push(0);
+    for (let pad = 0xEC; bits.length < cap; pad ^= 0xEC ^ 0x11) put(pad, 8);
+    const data = []; for (let i = 0; i < bits.length; i += 8) { let b = 0; for (let k = 0; k < 8; k++) b = (b << 1) | bits[i + k]; data.push(b); }
+    // 分塊、加上 ECC、交錯
+    const nb = NUM_BLOCKS[ecl][ver], eccLen = ECC_PER_BLOCK[ecl][ver], raw = Math.floor(rawModules(ver) / 8), nShort = nb - raw % nb, shortLen = Math.floor(raw / nb), gen = rsGen(eccLen), blocks = [];
+    for (let i = 0, k = 0; i < nb; i++) { const dat = data.slice(k, k + shortLen - eccLen + (i < nShort ? 0 : 1)); k += dat.length; const ec = rsRem(dat, gen); if (i < nShort) dat.push(0); blocks.push(dat.concat(ec)); }
+    const all = [];
+    for (let i = 0; i < blocks[0].length; i++) blocks.forEach((bl, j) => { if (i !== shortLen - eccLen || j >= nShort) all.push(bl[i]); });
+    const { size, m, fn } = makeFunction(ver);
+    let bi = 0; zigzag(size, fn, (x, y) => { m[y][x] = bi < all.length * 8 ? bitAt(all[bi >> 3], 7 - (bi & 7)) ? 1 : 0 : 0; bi++; });
+    const applyMask = k => { for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!fn[y][x] && maskFn[k](x, y)) m[y][x] ^= 1; };
+    const drawFormat = k => {
+      const bitsF = fmtCode(FMT_BITS[ecl], k);
+      FMT1.forEach(([x, y], i) => { m[y][x] = bitAt(bitsF, i) ? 1 : 0; });
+      for (let i = 0; i < 15; i++) { const [x, y] = fmt2(size, i); m[y][x] = bitAt(bitsF, i) ? 1 : 0; }
+      m[size - 8][8] = 1;
+    };
+    let best = 0, bestP = Infinity;
+    for (let k = 0; k < 8; k++) { applyMask(k); drawFormat(k); const p = penalty(m, size); if (p < bestP) { bestP = p; best = k; } applyMask(k); }
+    applyMask(best); drawFormat(best);
+    return { size, version: ver, get: (x, y) => m[y][x] === 1 };
+  }
+  function draw(canvas, text, px, ecl = 'M') {
+    const q = encode(text, ecl), quiet = 4, n = q.size + quiet * 2, cell = Math.max(1, Math.floor(px / n)), W = cell * n;
+    canvas.width = W; canvas.height = W; const c = canvas.getContext('2d');
+    c.fillStyle = '#fff'; c.fillRect(0, 0, W, W); c.fillStyle = '#000';
+    for (let y = 0; y < q.size; y++) for (let x = 0; x < q.size; x++) if (q.get(x, y)) c.fillRect((x + quiet) * cell, (y + quiet) * cell, cell, cell);
+    return q;
+  }
+
+  /* ---------- 解碼 ---------- */
+  function binarize(img) {
+    const { data, width: w, height: h } = img, g = new Uint8Array(w * h);
+    for (let i = 0, j = 0; i < w * h; i++, j += 4) g[i] = (data[j] * 77 + data[j + 1] * 150 + data[j + 2] * 29) >> 8;
+    const I = new Int32Array((w + 1) * (h + 1));
+    for (let y = 0; y < h; y++) { let row = 0; for (let x = 0; x < w; x++) { row += g[y * w + x]; I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + row; } }
+    const r = Math.max(6, Math.floor(Math.min(w, h) / 12)), bin = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+      for (let x = 0; x < w; x++) {
+        const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1), area = (x1 - x0) * (y1 - y0);
+        const sum = I[y1 * (w + 1) + x1] - I[y0 * (w + 1) + x1] - I[y1 * (w + 1) + x0] + I[y0 * (w + 1) + x0];
+        bin[y * w + x] = g[y * w + x] * area < sum * 0.9 ? 1 : 0;
+      }
+    }
+    return { bin, w, h };
+  }
+  const ratioOK = (r, tol) => { const t = r[0] + r[1] + r[2] + r[3] + r[4], m = t / 7; if (r.some(v => v === 0)) return false; return Math.abs(r[0] - m) <= m * tol && Math.abs(r[1] - m) <= m * tol && Math.abs(r[2] - 3 * m) <= 3 * m * tol && Math.abs(r[3] - m) <= m * tol && Math.abs(r[4] - m) <= m * tol; };
+  // 從 (x,y) 沿方向 (dx,dy) 量「黑(中心)→白→黑」，回傳 { m: 模組大小, c: 中心修正量 }
+  function crossCheck(B, x, y, dx, dy) {
+    const { bin, w, h } = B, at = i => { const xx = Math.round(x + dx * i), yy = Math.round(y + dy * i); return xx < 0 || yy < 0 || xx >= w || yy >= h ? -1 : bin[yy * w + xx]; };
+    if (at(0) !== 1) return null;
+    const walk = sgn => { const res = []; let pos = 1, want = 1; for (let seg = 0; seg < 3; seg++) { let n = 0; while (at(sgn * pos) === want && n < 600) { n++; pos++; } res.push(n); want = 1 - want; } return res; };
+    const mn = walk(-1), pl = walk(1), r = [mn[2], mn[1], mn[0] + pl[0] + 1, pl[1], pl[2]];
+    if (!ratioOK(r, 0.7)) return null;
+    const total = r[0] + r[1] + r[2] + r[3] + r[4], start = -(mn[0] + mn[1] + mn[2]);
+    return { m: total / 7, c: start + (total - 1) / 2 };
+  }
+  function findFinders(B) {
+    const { bin, w, h } = B, cand = [];
+    for (let y = 0; y < h; y += 1) {
+      const runs = [], starts = []; let cur = bin[y * w], len = 0, st = 0;
+      for (let x = 0; x < w; x++) { const v = bin[y * w + x]; if (v === cur) len++; else { runs.push(len); starts.push(st); cur = v; st = x; len = 1; } }
+      runs.push(len); starts.push(st);
+      const firstDark = bin[y * w] === 1 ? 0 : 1;
+      for (let i = firstDark; i + 4 < runs.length; i += 2) {
+        const r = runs.slice(i, i + 5);
+        if (!ratioOK(r, 0.6)) continue;
+        const tot = r[0] + r[1] + r[2] + r[3] + r[4], cx = starts[i] + tot / 2 - 0.5;
+        const v = crossCheck(B, cx, y, 0, 1); if (!v) continue;
+        const cy = y + v.c, hz = crossCheck(B, cx, cy, 1, 0); if (!hz) continue;
+        const cx2 = cx + hz.c, v2 = crossCheck(B, cx2, cy, 0, 1); if (!v2) continue;
+        const m = (hz.m + v2.m) / 2, fy = cy + v2.c;
+        const hit = cand.find(c => Math.hypot(c.x - cx2, c.y - fy) < c.m * 3);
+        if (hit) { hit.x = (hit.x * hit.n + cx2) / (hit.n + 1); hit.y = (hit.y * hit.n + fy) / (hit.n + 1); hit.m = (hit.m * hit.n + m) / (hit.n + 1); hit.n++; } else cand.push({ x: cx2, y: fy, m, n: 1 });
+      }
+    }
+    return cand.filter(c => c.n >= 2).sort((a, b) => b.n - a.n).slice(0, 8);
+  }
+  function triples(cand) {
+    const out = [];
+    for (let i = 0; i < cand.length; i++) for (let j = i + 1; j < cand.length; j++) for (let k = j + 1; k < cand.length; k++) {
+      const P = [cand[i], cand[j], cand[k]], d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+      for (let t = 0; t < 3; t++) {
+        const tl = P[t], a = P[(t + 1) % 3], b = P[(t + 2) % 3], da = d(tl, a), db = d(tl, b), dh = d(a, b);
+        const e1 = Math.abs(da - db) / Math.max(da, db), e2 = Math.abs(dh - Math.hypot(da, db)) / dh, ms = Math.max(tl.m, a.m, b.m) / Math.min(tl.m, a.m, b.m);
+        if (e1 < 0.25 && e2 < 0.25 && ms < 1.6 && da > tl.m * 8) out.push({ tl, a, b, score: e1 + e2 + (ms - 1) });
+      }
+    }
+    return out.sort((p, q) => p.score - q.score).slice(0, 3);
+  }
+  function homography(src, dst) {
+    const A = [], rhs = [];
+    for (let i = 0; i < 4; i++) {
+      const [X, Y] = src[i], [u, v] = dst[i];
+      A.push([X, Y, 1, 0, 0, 0, -u * X, -u * Y]); rhs.push(u);
+      A.push([0, 0, 0, X, Y, 1, -v * X, -v * Y]); rhs.push(v);
+    }
+    const n = 8; for (let i = 0; i < n; i++) A[i].push(rhs[i]);
+    for (let c = 0; c < n; c++) {
+      let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+      if (Math.abs(A[p][c]) < 1e-12) return null; [A[c], A[p]] = [A[p], A[c]];
+      for (let r = 0; r < n; r++) if (r !== c) { const f = A[r][c] / A[c][c]; for (let k = c; k <= n; k++) A[r][k] -= f * A[c][k]; }
+    }
+    return A.map((row, i) => row[n] / row[i]);
+  }
+  function decodeMatrix(M, size) {
+    const ver = (size - 17) / 4; if (!Number.isInteger(ver) || ver < 1 || ver > MAX_VER) return null;
+    // 格式資訊
+    let r1 = 0, r2 = 0;
+    FMT1.forEach(([x, y], i) => { if (M[y][x]) r1 |= 1 << i; });
+    for (let i = 0; i < 15; i++) { const [x, y] = fmt2(size, i); if (M[y][x]) r2 |= 1 << i; }
+    const pop = x => { let c = 0; while (x) { c += x & 1; x >>>= 1; } return c; };
+    let best = null, bd = 99;
+    for (let f = 0; f < 32; f++) { const code = fmtCode(f >> 3, f & 7), d = Math.min(pop(code ^ r1), pop(code ^ r2)); if (d < bd) { bd = d; best = f; } }
+    if (bd > 3) return null;
+    const ecl = FMT_NAME[best >> 3], mask = best & 7, { fn } = makeFunction(ver);
+    const bits = []; zigzag(size, fn, (x, y) => bits.push((M[y][x] ^ (maskFn[mask](x, y) ? 1 : 0))));
+    const cw = []; for (let i = 0; i + 8 <= bits.length; i += 8) { let b = 0; for (let k = 0; k < 8; k++) b = (b << 1) | bits[i + k]; cw.push(b); }
+    const nb = NUM_BLOCKS[ecl][ver], eccLen = ECC_PER_BLOCK[ecl][ver], raw = Math.floor(rawModules(ver) / 8), nShort = nb - raw % nb, shortLen = Math.floor(raw / nb);
+    const blocks = Array.from({ length: nb }, () => ({ d: [], e: [] })), dl = i => shortLen - eccLen + (i < nShort ? 0 : 1);
+    let k = 0;
+    for (let i = 0; i <= shortLen - eccLen; i++) for (let j = 0; j < nb; j++) if (i < dl(j)) blocks[j].d.push(cw[k++]);
+    for (let i = 0; i < eccLen; i++) for (let j = 0; j < nb; j++) blocks[j].e.push(cw[k++]);
+    const data = [];
+    for (const bl of blocks) { const fixed = rsCorrect(bl.d.concat(bl.e), eccLen); if (!fixed) return null; for (let i = 0; i < bl.d.length; i++) data.push(fixed[i]); }
+    // 解析（只支援 byte 模式）
+    const bs = []; data.forEach(b => { for (let i = 7; i >= 0; i--) bs.push((b >> i) & 1); });
+    let p = 0; const rd = n => { let v = 0; for (let i = 0; i < n; i++) v = (v << 1) | (bs[p++] || 0); return v; };
+    const out = [];
+    while (p + 4 <= bs.length) {
+      const mode = rd(4); if (mode === 0) break; if (mode !== 4) return null;
+      const cnt = rd(ver <= 9 ? 8 : 16); for (let i = 0; i < cnt; i++) out.push(rd(8));
+    }
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(out)); } catch (e) { return null; }
+  }
+  function sampleMatrix(B, H, size) {
+    const M = Array.from({ length: size }, () => new Uint8Array(size)), { bin, w, h } = B;
+    const px = (X, Y) => { const d = H[6] * X + H[7] * Y + 1, u = (H[0] * X + H[1] * Y + H[2]) / d, v = (H[3] * X + H[4] * Y + H[5]) / d, x = Math.round(u), y = Math.round(v); return x < 0 || y < 0 || x >= w || y >= h ? 0 : bin[y * w + x]; };
+    const o = [[0, 0], [0.28, 0], [-0.28, 0], [0, 0.28], [0, -0.28]];
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) { let s = 0; for (const [dx, dy] of o) s += px(c + 0.5 + dx, r + 0.5 + dy); M[r][c] = s >= 3 ? 1 : 0; }
+    return M;
+  }
+  function decode(img) {
+    const B = binarize(img), cand = findFinders(B);
+    if (cand.length < 3) return null;
+    for (const t of triples(cand)) {
+      const TL = t.tl, cr = (A, Bp) => (A.x - TL.x) * (Bp.y - TL.y) - (A.y - TL.y) * (Bp.x - TL.x);
+      const TR = cr(t.a, t.b) > 0 ? t.a : t.b, BL = TR === t.a ? t.b : t.a, m = (TL.m + TR.m + BL.m) / 3;
+      const dim = (Math.hypot(TR.x - TL.x, TR.y - TL.y) + Math.hypot(BL.x - TL.x, BL.y - TL.y)) / 2 / m + 7;
+      const base = Math.round((dim - 17) / 4);
+      for (const dv of [0, 1, -1, 2, -2]) {
+        const ver = base + dv; if (ver < 1 || ver > MAX_VER) continue;
+        const size = ver * 4 + 17, k = (size - 7) / (size - 7);
+        const hasAlign = ver >= 2, mp = hasAlign ? size - 6.5 : size - 3.5, f = (mp - 3.5) / (size - 7);
+        const ux = (TR.x - TL.x) / (size - 7), uy = (TR.y - TL.y) / (size - 7), vx = (BL.x - TL.x) / (size - 7), vy = (BL.y - TL.y) / (size - 7);
+        const px0 = TL.x + (mp - 3.5) * (ux + vx), py0 = TL.y + (mp - 3.5) * (uy + vy);
+        const offs = [[0, 0]]; for (let s = 1; s <= 3; s++) for (let a = -s; a <= s; a++) for (let b = -s; b <= s; b++) if (Math.max(Math.abs(a), Math.abs(b)) === s) offs.push([a, b]);
+        for (const [a, b] of offs) {
+          const H = homography([[3.5, 3.5], [size - 3.5, 3.5], [3.5, size - 3.5], [mp, mp]], [[TL.x, TL.y], [TR.x, TR.y], [BL.x, BL.y], [px0 + a * m * 0.7, py0 + b * m * 0.7]]);
+          if (!H) continue;
+          const text = decodeMatrix(sampleMatrix(B, H, size), size);
+          if (text !== null) return text;
+        }
+      }
+    }
+    return null;
+  }
+  return { encode, draw, decode, _decodeMatrix: decodeMatrix };
+})();
+if (typeof module !== 'undefined') module.exports = QR;
+
+</script>
+<script>
+/* ============================================================
+ * 天空模擬 · 步驟 2：地面視角 + 太空視角（同步）
+ * 共用狀態（URL hash）：
+ *   #m=sky&d=2026-11-16&t=19:30&loc=tpe&f=180&g=0&tr=1&st=1&v=p&pip=1&cam=d3&sg=1
+ *   v：主畫面 p=人的視角 s=太空視角；pip：小視窗；cam：太空相機 d3=立體 tb=課本視角；sg：視線
+ * ============================================================ */
+(() => {
+  'use strict';
+  const A = SkyAstro;
+  const $ = s => document.querySelector(s);
+  const FONT = '"LXGW WenKai TC","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif';
+  const cleanStart = !location.hash || location.hash === '#';   // 乾淨網址第一次打開才問要不要導覽
+  const RAD = Math.PI / 180, DEG = 180 / Math.PI, TAU = Math.PI * 2;
+
+  const LOCS = {
+    tpe: { name: '臺北', lat: 25.04, lon: 121.56 },
+    hsz: { name: '新竹', lat: 24.81, lon: 120.97 },
+    txg: { name: '臺中', lat: 24.15, lon: 120.67 },
+    tna: { name: '臺南', lat: 22.99, lon: 120.21 },
+    khh: { name: '高雄', lat: 22.63, lon: 120.30 },
+    hun: { name: '花蓮', lat: 23.98, lon: 121.60 }
+  };
+  const ALT_MIN = -26, ALT_MAX = 90;
+  const DIRS8 = ['北', '東北', '東', '東南', '南', '西南', '西', '西北'];
+  const dirName = az => DIRS8[Math.round(A.n360(az) / 45) % 8];
+  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const ease = p => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+
+  /* ---------- 色彩 ---------- */
+  const hex2 = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+  const toHex = a => '#' + a.map(v => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('');
+  const mixc = (a, b, t) => { const x = hex2(a), y = hex2(b); return toHex([lerp(x[0], y[0], t), lerp(x[1], y[1], t), lerp(x[2], y[2], t)]); };
+  const rgba = (c, a) => { const x = hex2(c); return `rgba(${x[0]},${x[1]},${x[2]},${a})`; };
+  const KF = [
+    [-18, '#0A1029', '#141B3C'], [-12, '#111A42', '#2A3568'], [-6, '#26346C', '#9B6E96'],
+    [-1, '#3E5B98', '#F09E70'], [3, '#5E8FCB', '#F6C99E'], [10, '#6BA3DB', '#CFE3F1'], [30, '#5B9BD9', '#BEDCF2']
+  ];
+  function skyColors(h) {
+    if (h <= KF[0][0]) return [KF[0][1], KF[0][2]];
+    for (let i = 1; i < KF.length; i++) {
+      if (h <= KF[i][0]) { const a = KF[i - 1], b = KF[i], t = (h - a[0]) / (b[0] - a[0]); return [mixc(a[1], b[1], t), mixc(a[2], b[2], t)]; }
+    }
+    const l = KF[KF.length - 1]; return [l[1], l[2]];
+  }
+  // 角色固定色：太陽=琥珀、月亮=銀白、人=珊瑚紅、地球=藍
+  const COL = { sun: '#E2A33B', moon: '#C9D0F0', person: '#E0553E', earthDay: '#7DAEE6', earthNight: '#16224B', space: '#0B1230' };
+
+  /* ---------- 狀態 ---------- */
+  const CAM_PRESET = { d3: { yaw: -32, a: 62 }, tb: { yaw: 0, a: 0 } };
+  const state = {
+    mode: 'sky', ms: Math.floor(Date.now() / 60000) * 60000, loc: 'tpe', face: 180,
+    grid: false, trail: true, stars: true, speed: 60, playing: false,
+    view: 'g', pv: '', pip: true, cam: 'tb', sight: true, panel: false, aim: null, task: 0, orbElev: 30, gb: 180
+  };
+  const spaceCam = { ...CAM_PRESET.tb };
+  // 視角註冊表：要新增視角，加一筆資料＋一個畫法（見 draw()）。pip = 小視窗要顯示哪個視角
+  const VIEWS = [
+    { id: 'p', lg: '人的視角', sm: '人', pip: 's' },
+    { id: 'g', lg: '地面視角', sm: '地面', pip: 'p' },
+    { id: 's', lg: '太空視角', sm: '太空', pip: 'p' }   // 四季模式時：g、p 的小視窗改顯示 s（地球軌道），s 的小視窗改顯示 g
+  ];
+  const VIEW_IDS = VIEWS.map(v => v.id), viewOf = id => VIEWS.find(v => v.id === id) || VIEWS[0];
+  // 各模式的預設視角（基本模式切換模式時套用）；量測一定用人的視角
+  const pipOn = () => state.pip;
+  const isOrbit = () => state.cam === 'o' && state.mode === 'season';   // 「繞日」：太空相機的第三個選項，只有四季才有
+  // 小視窗顯示哪個視角：四季模式固定（地球軌道 ↔ 地面）；其他模式可自選（state.pv），不能與主畫面相同
+  const pipView = () => {
+    return state.pv && state.pv !== state.view && VIEW_IDS.includes(state.pv) ? state.pv : viewOf(state.view).pip;
+  };
+  function loadHash(str) {
+    try {
+      const p = new URLSearchParams((str === undefined ? location.hash : str).replace(/^#/, ''));
+      const d = p.get('d');
+      if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        const [h, m] = (p.get('t') || '19:00').split(':').map(Number);
+        state.ms = A.msFromLocal(d, (h || 0) * 60 + (m || 0));
+      }
+      if (LOCS[p.get('loc')]) state.loc = p.get('loc');
+      if (p.has('f')) state.face = A.n360(+p.get('f') || 0);
+      if (p.has('g')) state.grid = p.get('g') === '1';
+      if (p.has('tr')) state.trail = p.get('tr') === '1';
+      if (p.has('st')) state.stars = p.get('st') === '1';
+      if (VIEW_IDS.includes(p.get('v'))) state.view = p.get('v');
+      if (p.has('gb')) state.gb = A.n360(+p.get('gb') || 0);
+      if (p.has('pip')) state.pip = p.get('pip') === '1';
+      state.pv = VIEW_IDS.includes(p.get('pv')) ? p.get('pv') : '';   // 連結沒指定就用預設，讓預設題目的起點可預期
+      if (p.has('sg')) state.sight = p.get('sg') === '1';
+      if (['meas', 'sky', 'moon', 'season'].includes(p.get('m'))) state.mode = p.get('m');
+      if (p.has('oe')) state.orbElev = clamp(+p.get('oe') || 30, 5, 85);
+      if (p.has('task')) state.task = clamp((+p.get('task') || 1) - 1, 0, 2);
+      if (CAM_PRESET[p.get('cam')]) { state.cam = p.get('cam'); Object.assign(spaceCam, CAM_PRESET[state.cam]); camTween = null; }
+      else if (p.get('cam') === 'o') { state.cam = 'o'; camTween = null; }
+      if (state.cam === 'o' && state.mode !== 'season') { state.cam = 'tb'; Object.assign(spaceCam, CAM_PRESET.tb); }   // 繞日只有四季才有
+    } catch (e) { /* 沙盒預覽可能不給讀 hash */ }
+  }
+  function fullHash() {
+    const lp = A.localParts(state.ms);
+    return `m=${state.mode}&d=${lp.date}&t=${A.fmtHM(lp.min)}&loc=${state.loc}&f=${Math.round(state.face) % 360}` +
+           `&g=${state.grid ? 1 : 0}&tr=${state.trail ? 1 : 0}&st=${state.stars ? 1 : 0}` +
+           `&task=${state.task + 1}&v=${state.view}&pip=${state.pip ? 1 : 0}${state.pv ? '&pv=' + state.pv : ''}&cam=${CAM_PRESET[state.cam] || state.cam === 'o' ? state.cam : 'tb'}&sg=${state.sight ? 1 : 0}&oe=${state.orbElev}&gb=${Math.round(state.gb) % 360}`;
+  }
+  let hashTimer = null;
+  function saveHash() {
+    clearTimeout(hashTimer);
+    hashTimer = setTimeout(() => {
+      try {
+        history.replaceState(null, '', '#' + fullHash());
+      } catch (e) { /* 忽略 */ }
+    }, 250);
+  }
+
+  /* ---------- 一天的快取 ---------- */
+  let dayCache = { key: '' };
+  function ensureDay() {
+    const loc = LOCS[state.loc], date = A.localParts(state.ms).date, key = date + '|' + state.loc;
+    if (dayCache.key === key) return dayCache;
+    const start = A.msFromLocal(date, 0), st = [], mt = [];
+    for (let i = 0; i <= 144; i++) {
+      const ms = start + i * 600000;
+      const s = A.sunPos(ms, loc.lat, loc.lon), m = A.moonPos(ms, loc.lat, loc.lon);
+      st.push({ ms, az: s.az, alt: s.alt }); mt.push({ ms, az: m.az, alt: m.alt });
+    }
+    dayCache = { key, start, sunTrail: st, moonTrail: mt,
+      sunRS: A.riseSet('sun', start, loc.lat, loc.lon), moonRS: A.riseSet('moon', start, loc.lat, loc.lon) };
+    return dayCache;
+  }
+  const STARS = A.makeStars();
+  const BGSTARS = A.makeStars(70, 7);   // 太空背景的靜態星點（只用 ra/dec 當亂數）
+
+  /* ---------- 畫布共用 ---------- */
+  const cvMain = $('#sky'), cvPip = $('#pip'), wrap = $('#skywrap');
+  let chips = [], view = { s: 1 }, dirty = true;
+
+  function prep(cv) {
+    const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+    if (!W || !H) return null;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { c, W, H };
+  }
+  function rr(c, x, y, w, h, r) {
+    c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+  }
+  function label(c, text, x, y, fs, light, align = 'center', base = 'bottom') {
+    c.font = `700 ${fs}px ${FONT}`; c.textAlign = align; c.textBaseline = base;
+    c.lineWidth = 3; c.strokeStyle = light ? 'rgba(10,16,41,.6)' : 'rgba(255,255,255,.6)'; c.lineJoin = 'round';
+    c.strokeText(text, x, y); c.fillStyle = light ? '#F4F4FA' : '#1E2230'; c.fillText(text, x, y);
+  }
+  function pipTag() { /* 已由小視窗左上角的切換條（pipChip）取代 */ }
+
+  // 畫「亮面朝向某方向」的球：亮面中心朝 bearing（從上方順時針的度數），亮面比例 k
+  function litShape(c, R, k) {
+    const cosI = 2 * k - 1, xt = -R * cosI;
+    c.beginPath(); c.arc(0, 0, R, -Math.PI / 2, Math.PI / 2, false);
+    const n = 48;
+    for (let i = 0; i <= n; i++) { const ph = Math.PI * (1 - i / n); c.lineTo(xt * Math.sin(ph), -R * Math.cos(ph)); }
+    c.closePath();
+  }
+  function drawMoon(c, x, y, R, k, bearingDeg, dayF) {
+    c.save(); c.translate(x, y); c.rotate((bearingDeg - 90) * RAD);
+    c.beginPath(); c.arc(0, 0, R, 0, TAU);
+    c.fillStyle = dayF > 0.5 ? 'rgba(110,130,170,.30)' : 'rgba(34,42,84,.92)'; c.fill();
+    litShape(c, R, k); c.fillStyle = '#F6F1DE'; c.fill();
+    c.save(); c.clip();
+    c.fillStyle = 'rgba(150,148,128,.30)';
+    [[-0.30, -0.22, 0.24], [0.18, 0.28, 0.30], [0.34, -0.30, 0.14], [-0.15, 0.40, 0.12]].forEach(([a, b, r]) => { c.beginPath(); c.arc(a * R, b * R, r * R, 0, TAU); c.fill(); });
+    c.restore();
+    c.beginPath(); c.arc(0, 0, R, 0, TAU); c.lineWidth = 1; c.strokeStyle = 'rgba(80,80,100,.35)'; c.stroke();
+    c.restore();
+  }
+
+  /* ============================================================
+   * 人的視角（地面看天空）
+   * ============================================================ */
+  function renderPerson(cv, isMain) {
+    const P = prep(cv); if (!P) return; const { c, W, H } = P;
+    const s = H / (ALT_MAX - ALT_MIN);
+    if (isMain) view = { s, W, H };
+    const xOf = az => W / 2 + A.wrap180(az - state.face) * s;
+    const yOf = alt => (ALT_MAX - alt) * s;
+    const y0 = yOf(0);
+    const loc = LOCS[state.loc], ms = state.ms, day = ensureDay();
+    const sun = A.sunPos(ms, loc.lat, loc.lon), moon = A.moonPos(ms, loc.lat, loc.lon);
+    const dayF = clamp((sun.alt + 6) / 12, 0, 1);
+    const lightText = dayF < 0.5;
+    const bigK = document.documentElement.classList.contains('big') ? 1.25 : 1;
+    const fs = clamp(W * 0.0185 * (isMain ? 1 : 1.25), 9, 26) * (isMain ? bigK : 1);
+    const Rs = clamp(W * 0.018 * (isMain ? 1 : 1.3), 7, 24) * (isMain && bigK > 1 ? 1.15 : 1), Rm = Rs * 1.15;
+
+    const [zen, hor] = skyColors(sun.alt);
+    const g = c.createLinearGradient(0, 0, 0, y0);
+    g.addColorStop(0, zen); g.addColorStop(0.6, mixc(zen, hor, 0.4)); g.addColorStop(1, hor);
+    c.fillStyle = g; c.fillRect(0, 0, W, y0);
+
+    if (sun.alt > -8 && sun.alt < 12) {
+      const a = 0.42 * (1 - Math.abs(sun.alt - 1) / 11), gx = xOf(sun.az);
+      const gr = c.createRadialGradient(gx, y0, 0, gx, y0, W * 0.5);
+      gr.addColorStop(0, `rgba(255,150,80,${Math.max(a, 0)})`); gr.addColorStop(1, 'rgba(255,150,80,0)');
+      c.fillStyle = gr; c.fillRect(0, 0, W, y0);
+    }
+
+    const starA = state.stars ? clamp((-sun.alt - 3) / 12, 0, 1) : 0;
+    if (starA > 0) {
+      for (const st of STARS) {
+        const p = A.starAltAz(st, ms, loc.lat, loc.lon);
+        if (p.alt < 1) continue;
+        const x = xOf(p.az); if (x < -4 || x > W + 4) continue;
+        c.fillStyle = `rgba(255,255,240,${starA * clamp(p.alt / 8, 0, 1) * (0.35 + 0.65 * st.b)})`;
+        c.beginPath(); c.arc(x, yOf(p.alt), (0.6 + st.b * 1.5) * (isMain ? 1 : 0.8), 0, TAU); c.fill();
+      }
+    }
+
+    if (state.grid) {
+      const gl = lightText ? 'rgba(255,255,255,' : 'rgba(20,30,70,';
+      c.lineWidth = 1; c.font = `400 ${fs * 0.85}px ${FONT}`; c.textBaseline = 'bottom';
+      for (let a = 15; a <= 90; a += 15) {
+        const y = yOf(a); c.strokeStyle = gl + (a % 45 === 0 ? '0.28)' : '0.16)');
+        c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke();
+        c.fillStyle = gl + '0.85)';
+        if (a === 90) { c.textAlign = 'center'; c.fillText('90° 天頂', W / 2, y + fs * 1.5); }
+        else { c.textAlign = 'left'; c.fillText(a + '°', 8, y - 3); }
+      }
+      for (let az = 0; az < 360; az += 15) {
+        const x = xOf(az); if (x < -2 || x > W + 2) continue;
+        c.strokeStyle = gl + (az % 45 === 0 ? '0.26)' : '0.12)');
+        c.beginPath(); c.moveTo(x, 0); c.lineTo(x, y0); c.stroke();
+      }
+    }
+
+    if (state.mode === 'season') drawSeasonTrails(c, W, xOf, yOf, y0, fs, lightText, isMain);
+    if (state.trail) {
+      const drawTrail = (pts, stroke, labelHours) => {
+        c.save(); c.beginPath(); c.rect(0, 0, W, y0); c.clip();
+        c.lineWidth = isMain ? 2.4 : 1.8; c.lineCap = 'round'; c.setLineDash([1, 7]); c.strokeStyle = stroke; c.beginPath();
+        let prev = null;
+        for (const p of pts) {
+          const x = xOf(p.az), y = yOf(p.alt);
+          if (prev && Math.abs(x - prev.x) < W * 0.5 && p.alt > -3 && prev.alt > -3) c.lineTo(x, y); else c.moveTo(x, y);
+          prev = { x, y, alt: p.alt };
+        }
+        c.stroke(); c.setLineDash([]);
+        c.font = `700 ${fs * 0.82}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'top';
+        for (const p of pts) {
+          const lp = A.localParts(p.ms);
+          if (lp.min % 60 !== 0 || p.alt <= 0.5) continue;
+          const x = xOf(p.az), y = yOf(p.alt); if (x < 0 || x > W) continue;
+          c.fillStyle = stroke; c.beginPath(); c.arc(x, y, isMain ? 3.4 : 2.4, 0, TAU); c.fill();
+          if (isMain && labelHours.includes(lp.min / 60)) { c.fillStyle = lightText ? 'rgba(255,255,255,.9)' : 'rgba(25,32,64,.85)'; c.fillText((lp.min / 60) + '時', x, y + 7); }
+        }
+        c.restore();
+      };
+      drawTrail(day.moonTrail, lightText ? 'rgba(214,222,255,.9)' : 'rgba(80,96,160,.75)', []);
+      drawTrail(day.sunTrail, COL.sun, [6, 9, 12, 15, 18]);
+    }
+
+    const sunX = xOf(sun.az), sunY = yOf(sun.alt), moonX = xOf(moon.az), moonY = yOf(moon.alt);
+    {
+      const inView = moonX > -Rm * 2 && moonX < W + Rm * 2 && moon.alt > ALT_MIN;
+      if (inView) {
+        c.save();
+        if (moon.alt <= 0) { c.beginPath(); c.arc(moonX, moonY, Rm, 0, TAU); c.setLineDash([4, 4]); c.lineWidth = 1.4; c.strokeStyle = lightText ? 'rgba(220,226,255,.55)' : 'rgba(30,40,80,.5)'; c.stroke(); c.setLineDash([]); }
+        c.beginPath(); c.rect(0, 0, W, y0); c.clip();
+        const mg = c.createRadialGradient(moonX, moonY, Rm * 0.8, moonX, moonY, Rm * 3.6);
+        mg.addColorStop(0, `rgba(235,235,255,${0.30 * (1 - dayF) * (0.4 + 0.6 * moon.k)})`); mg.addColorStop(1, 'rgba(235,235,255,0)');
+        c.fillStyle = mg; c.fillRect(moonX - Rm * 4, moonY - Rm * 4, Rm * 8, Rm * 8);
+        drawMoon(c, moonX, moonY, Rm, moon.k, A.bearing(moon.alt, moon.az, sun.alt, sun.az), dayF);
+        c.restore();
+        if (moon.alt > 0 && isMain) label(c, '月亮', moonX, moonY - Rm - 5, fs, lightText);
+      }
+    }
+    {
+      const inView = sunX > -Rs * 2 && sunX < W + Rs * 2 && sun.alt > ALT_MIN;
+      if (inView) {
+        c.save();
+        if (sun.alt <= 0) { c.beginPath(); c.arc(sunX, sunY, Rs, 0, TAU); c.setLineDash([4, 4]); c.lineWidth = 1.4; c.strokeStyle = 'rgba(226,163,59,.7)'; c.stroke(); c.setLineDash([]); }
+        c.beginPath(); c.rect(0, 0, W, y0); c.clip();
+        const col = mixc('#FF7B39', '#FFC93C', clamp((sun.alt - 2) / 23, 0, 1));
+        const gl = c.createRadialGradient(sunX, sunY, Rs * 0.6, sunX, sunY, Rs * 3.8);
+        gl.addColorStop(0, rgba(col, 0.42)); gl.addColorStop(1, rgba(col, 0));
+        c.fillStyle = gl; c.fillRect(sunX - Rs * 4, sunY - Rs * 4, Rs * 8, Rs * 8);
+        c.beginPath(); c.arc(sunX, sunY, Rs, 0, TAU); c.fillStyle = col; c.fill();
+        c.lineWidth = 1; c.strokeStyle = 'rgba(160,90,10,.35)'; c.stroke();
+        c.restore();
+        if (sun.alt > 0 && isMain) label(c, '太陽', sunX, sunY - Rs - 5, fs, lightText && sun.alt < 5);
+      }
+    }
+
+    const gd = mixc('#18202E', '#86A07A', dayF), gd2 = mixc('#10161F', '#6E8964', dayF);
+    const gg = c.createLinearGradient(0, y0, 0, H); gg.addColorStop(0, gd); gg.addColorStop(1, gd2);
+    c.fillStyle = gg; c.fillRect(0, y0, W, H - y0);
+    c.strokeStyle = lightText ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.7)'; c.lineWidth = 1.4;
+    c.beginPath(); c.moveTo(0, y0); c.lineTo(W, y0); c.stroke();
+
+    const gtxt = dayF > 0.45 ? '#16210F' : '#E6EAF5', gtxt2 = dayF > 0.45 ? 'rgba(22,33,15,.7)' : 'rgba(230,234,245,.7)';
+    c.strokeStyle = gtxt2; c.lineWidth = 1;
+    for (let az = 0; az < 360; az += 15) {
+      const x = xOf(az); if (x < -2 || x > W + 2) continue;
+      c.beginPath(); c.moveTo(x, y0); c.lineTo(x, y0 + (az % 45 === 0 ? 11 : 5) * (isMain ? 1 : 0.6)); c.stroke();
+    }
+    const figOn = isMain && state.mode !== 'meas' && W >= 620, figH = fs * 1.9;
+    for (let az = 0; az < 360; az += (isMain ? 45 : 90)) {
+      const x = xOf(az); if (x < -40 || x > W + 40) continue;
+      const under = figOn && Math.abs(x - W / 2) < fs * 2.6;
+      const card = az % 90 === 0;
+      c.textAlign = 'center'; c.textBaseline = 'top';
+      c.fillStyle = gtxt; c.font = `700 ${fs * (card ? 1.35 : 1.05)}px ${FONT}`;
+      c.fillText(DIRS8[az / 45], x, y0 + 4 + 10 * (isMain ? 1 : 0.3) + (under ? figH : 0));
+      if (isMain && !under) { c.fillStyle = gtxt2; c.font = `400 ${fs * 0.8}px ${FONT}`; c.fillText(az + '°', x, y0 + 14 + fs * (card ? 1.55 : 1.25)); }
+    }
+
+    if (isMain) {
+      chips = [];
+      const edge = (name, az, alt, color) => {
+        const dx = A.wrap180(az - state.face);
+        if (Math.abs(dx) * s < W / 2 + 4) return;
+        const left = dx < 0;
+        const cr = cvMain.getBoundingClientRect(), ir = $('#hudInfo').getBoundingClientRect(), pr = cvPip.getBoundingClientRect();
+        let minY = fs * 3;
+        if (left) minY = Math.max(minY, ir.bottom - cr.top + fs * 1.4);
+        else if (state.pip) minY = Math.max(minY, pr.bottom - cr.top + fs * 1.4);
+        const y = Math.min(Math.max(yOf(clamp(alt, 6, 80)), minY), y0 - fs * 1.6);
+        const txt = left ? '‹ ' + name : name + ' ›';
+        c.font = `700 ${fs}px ${FONT}`;
+        const w = c.measureText(txt).width + fs * 1.4, h = fs * 2.1, x = left ? 8 : W - 8 - w;
+        c.fillStyle = lightText ? 'rgba(20,28,60,.86)' : 'rgba(247,246,243,.94)';
+        rr(c, x, y - h / 2, w, h, h / 2); c.fill();
+        c.lineWidth = 1; c.strokeStyle = color; c.stroke();
+        c.fillStyle = lightText ? '#F2F2F7' : '#1E2230'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText(txt, x + w / 2, y + 1);
+        chips.push({ x, y: y - h / 2, w, h, az });
+      };
+      if (state.mode !== 'meas') { edge('太陽', sun.az, sun.alt, COL.sun); edge('月亮', moon.az, moon.alt, '#8E93B5'); }
+      else drawMeasure(c, W, H, s, xOf, yOf, y0, fs, sun, moon);
+      if (figOn) drawBackFigure(c, W / 2, y0, fs, lightText);
+    } else pipTag(c, '人的視角 ⇄', 11);
+  }
+
+
+
+  /* ============================================================
+   * 步驟 5：太陽與四季
+   * ============================================================ */
+  const SEASONS = [
+    { n: '春分', lon: 0, col: '#6F8F4E', note: '北半球春天' },
+    { n: '夏至', lon: 90, col: '#E07B1A', note: '北半球夏天' },
+    { n: '秋分', lon: 180, col: '#B08A3A', note: '北半球秋天' },
+    { n: '冬至', lon: 270, col: '#4A6FD0', note: '北半球冬天' }
+  ];
+  const sunLon = ms => A.sunPos(ms, 0, 0).lon;
+  let seaKey = '', seaData = null, seaShown = false, seaJan1 = 0;
+  function buildSeason() {
+    const l = LOCS[state.loc], y = A.localParts(state.ms).date.slice(0, 4), key = y + state.loc;
+    if (key === seaKey) return seaData;
+    seaJan1 = A.msFromLocal(`${y}-01-01`, 720);
+    seaData = SEASONS.map(S => {
+      let ms = null, prev = null;
+      for (let d = 0; d < 367; d++) { const t = seaJan1 + d * DAY_MS, e = A.wrap180(sunLon(t) - S.lon); if (prev !== null && prev < 0 && e >= 0) { let a = t - DAY_MS, b = t; for (let i = 0; i < 20; i++) { const m = (a + b) / 2; (A.wrap180(sunLon(m) - S.lon) < 0) ? a = m : b = m; } ms = A.msFromLocal(A.localParts(b).date, 720); break; } prev = e; }
+      if (ms === null) ms = seaJan1;
+      const day0 = A.dayStartMs(ms), rs = A.riseSet('sun', day0, l.lat, l.lon);
+      let noonAlt = -90, noonAz = 180;
+      for (let m = 660; m <= 840; m += 5) { const sp = A.sunPos(day0 + m * 60000, l.lat, l.lon); if (sp.alt > noonAlt) { noonAlt = sp.alt; noonAz = sp.az; } }
+      const path = []; for (let m = 0; m <= 1440; m += 10) { const sp = A.sunPos(day0 + m * 60000, l.lat, l.lon); path.push({ az: sp.az, alt: sp.alt }); }
+      return { S, ms, rs, noonAlt, noonAz, path };
+    });
+    seaKey = key; seaShown = false; return seaData;
+  }
+  function drawSeasonTrails(c, W, xOf, yOf, y0, fs, lightText, isMain) {
+    const D = buildSeason(), topLimit = isMain ? Math.max($('.topbar').getBoundingClientRect().bottom, W < 700 ? $('#season').getBoundingClientRect().bottom : 0) - cvMain.getBoundingClientRect().top + 8 : 0;
+    c.save(); c.beginPath(); c.rect(0, 0, W, y0); c.clip();
+    [[D[1], '夏至'], [D[0], '春分、秋分'], [D[3], '冬至']].forEach(([it, name]) => {
+      c.strokeStyle = it.S.col; c.lineWidth = isMain ? 2.6 : 1.5; c.lineJoin = 'round'; c.beginPath();
+      let pen = false, lastX = 0;
+      it.path.forEach(p => {
+        if (p.alt < -0.5) { pen = false; return; }
+        const x = xOf(p.az), y = yOf(Math.max(p.alt, 0));
+        if (pen && Math.abs(x - lastX) > W * 0.5) pen = false;
+        if (!pen) c.moveTo(x, y); else c.lineTo(x, y);
+        pen = true; lastX = x;
+      });
+      c.stroke();
+      if (isMain) {
+        const x = xOf(it.noonAz), y = yOf(it.noonAlt);
+        if (x > fs * 3 && x < W - fs * 3) {
+          c.font = `700 ${fs * 0.95}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'top';
+          const txt = `${name}　正午高 ${Math.round(it.noonAlt)}°`, ly = Math.max(y + fs * 0.7, topLimit);
+          c.lineWidth = 4; c.strokeStyle = lightText ? 'rgba(10,16,48,.8)' : 'rgba(247,246,243,.85)'; c.strokeText(txt, x, ly);
+          c.fillStyle = it.S.col; c.fillText(txt, x, ly);
+          c.beginPath(); c.arc(x, y, 4, 0, TAU); c.fillStyle = it.S.col; c.fill();
+        }
+      }
+    });
+    c.restore();
+  }
+  function renderSeason() {
+    if (state.mode !== 'season') return;
+    const D = buildSeason(), l = LOCS[state.loc], cur = A.dayStartMs(state.ms);
+    const sp = A.sunPos(state.ms, l.lat, l.lon), dec = sp.dec * DEG, lp = A.localParts(state.ms);
+    const si = Math.floor(sunLon(cur + 1439 * 60000) / 90) % 4;
+    setText('seaNow', `${lp.m}/${lp.d}　天文上算：<b>${['春', '夏', '秋', '冬'][si]}季</b><br>太陽直射 <b>${dec >= 0 ? '北' : '南'}緯 ${Math.abs(dec).toFixed(1)}°</b>`);
+    const sl = $('#seaSlider'), idx = Math.round((cur - A.dayStartMs(seaJan1)) / DAY_MS);
+    if (+sl.value !== idx) sl.value = idx;
+    const fmt = t => t === null ? '—' : A.fmtClock(t);
+    const row = (it, name) => {
+      const len = it.rs.rise !== null && it.rs.set !== null ? Math.round((it.rs.set - it.rs.rise) / 60000) : null;
+      return `<tr data-i="${SEASONS.indexOf(it.S)}"><td><span class="sw" style="background:${it.S.col}"></span>${name}</td><td>${fmt(it.rs.rise)}<br><span class="hint">${it.rs.riseAz === null ? '' : dirName(it.rs.riseAz)}</span></td><td>${fmt(it.rs.set)}</td><td>${len === null ? '—' : Math.floor(len / 60) + ' 時 ' + (len % 60) + ' 分'}</td><td><b>${Math.round(it.noonAlt)}°</b></td></tr>`;
+    };
+    setText('seaTbl', '<tr><th>日子</th><th>日出</th><th>日落</th><th>白天</th><th>正午高度</th></tr>' + row(D[1], '夏至') + row(D[0], '春分、秋分') + row(D[3], '冬至'));
+    let msg = '';
+    if (seaShown) {
+      msg = `在${l.name}：夏天白天最長、正午太陽最高（${Math.round(D[1].noonAlt)}°），冬天白天最短、正午太陽最低（${Math.round(D[3].noonAlt)}°）。` +
+        '原因：地球的軸是斜的（約 23.4°），而且一年都指向同一個方向。夏天北半球朝著太陽傾斜，陽光照得比較直，白天也比較長；冬天剛好相反。' +
+        '注意：不是因為夏天離太陽比較近。地球大約每年 1 月初最靠近太陽、7 月初最遠。';
+    }
+    const m = $('#seaMsg'); if (m.textContent !== msg) m.textContent = msg;
+  }
+  const seaGo = ms => { state.playing = false; state.ms = A.msFromLocal(A.localParts(ms).date, A.localParts(state.ms).min); refresh(); };
+  $('#seaJump').querySelectorAll('button').forEach(b => b.addEventListener('click', () => seaGo(buildSeason()[+b.dataset.i].ms)));
+  $('#seaSlider').addEventListener('input', e => { buildSeason(); seaGo(seaJan1 + (+e.target.value) * DAY_MS); });
+  $('#seaTbl').addEventListener('click', e => { const tr = e.target.closest('tr[data-i]'); if (tr) seaGo(buildSeason()[+tr.dataset.i].ms); });
+  $('#seaAns').addEventListener('click', () => { seaShown = true; dirty = true; renderSeason(); });
+  $('#season .th').addEventListener('click', () => { const m = $('#season').classList.toggle('min'); $('#season .th').setAttribute('aria-expanded', m ? 'false' : 'true'); });
+  if (innerWidth < 620) { $('#season').classList.add('min'); $('#season .th').setAttribute('aria-expanded', 'false'); }
+  document.querySelectorAll('#orbSeg button').forEach(b => b.addEventListener('click', () => { state.orbElev = +b.dataset.e; refresh(); }));
+
+  /* ---------- 太空視角（四季）：太陽在中央，地球繞著走 ---------- */
+  let orbStars = null;
+  function renderOrbit(cv, isMain) {
+    const P = prep(cv); if (!P) return; const { c, W, H } = P;
+    c.fillStyle = '#0A1030'; c.fillRect(0, 0, W, H);
+    if (!orbStars) { let sd = 7; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647; orbStars = Array.from({ length: 140 }, () => ({ x: r(), y: r(), a: 0.2 + r() * 0.6 })); }
+    c.fillStyle = '#fff'; orbStars.forEach(st => { c.globalAlpha = st.a; c.fillRect(st.x * W, st.y * H, 1.4, 1.4); }); c.globalAlpha = 1;
+    const fs = clamp(W * 0.0185 * (isMain ? 1 : 1.25), 9, 26) * (isMain && document.documentElement.classList.contains('big') ? 1.25 : 1);
+    const el = (state.orbElev || 30) * RAD, se = Math.sin(el), ce = Math.cos(el);
+    const right = [0, 1, 0], up = [-se, 0, ce], fwd = [-ce, 0, -se];   // 從春分那一側斜看：夏至在左、冬至在右，地軸的傾斜看得最清楚
+    const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const narrow = W < 700;
+    const cx = isMain && !narrow ? W * 0.6 : W / 2, cy = isMain ? H / 2 - 10 : H * 0.5;
+    const Ro = isMain ? (narrow ? W * 0.36 : Math.min(W * 0.27, (H / 2 - 105) / (se + 0.22))) : Math.min(W * 0.36, H * 0.36 / Math.max(se, 0.3));
+    const proj = p => ({ x: cx + Ro * dot3(p, right), y: cy - Ro * dot3(p, up), z: dot3(p, fwd) });
+    const eps = 23.44 * RAD, axis = [0, Math.sin(eps), Math.cos(eps)], e1 = [1, 0, 0], e2 = [0, Math.cos(eps), -Math.sin(eps)];
+    const halo = (txt, x, y, size, col, align, base) => {
+      c.font = `700 ${size}px ${FONT}`; c.textAlign = align || 'center'; c.textBaseline = base || 'top';
+      c.lineWidth = 4; c.lineJoin = 'round'; c.strokeStyle = 'rgba(10,16,48,.9)'; c.strokeText(txt, x, y); c.fillStyle = col; c.fillText(txt, x, y);
+    };
+    // 軌道
+    c.beginPath(); for (let i = 0; i <= 120; i++) { const t = i / 120 * TAU, p = proj([Math.cos(t), Math.sin(t), 0]); i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y); }
+    c.setLineDash([5, 6]); c.lineWidth = 1.3; c.strokeStyle = 'rgba(200,210,255,.5)'; c.stroke(); c.setLineDash([]);
+    const sp = A.sunPos(state.ms, 0, 0), lonE = (sp.lon + 180) * RAD;
+    const posOf = L => [Math.cos(L), Math.sin(L), 0];
+    const items = [];
+    // 太陽
+    items.push({ z: 0, draw: () => {
+      const Rs = Math.max(9, Ro * 0.085), gl = c.createRadialGradient(cx, cy, Rs * 0.5, cx, cy, Rs * 3.6);
+      gl.addColorStop(0, 'rgba(255,200,70,.45)'); gl.addColorStop(1, 'rgba(255,200,70,0)'); c.fillStyle = gl; c.fillRect(cx - Rs * 4, cy - Rs * 4, Rs * 8, Rs * 8);
+      c.beginPath(); c.arc(cx, cy, Rs, 0, TAU); c.fillStyle = '#FFC93C'; c.fill();
+      if (isMain) halo('太陽', cx, cy + Rs * 1.3, fs, '#FFD66B');
+    } });
+    const globe = (L, R, cur, S, nearName) => {
+      const Pw = posOf(L), pr = proj(Pw);
+      items.push({ z: pr.z, draw: () => {
+        const sd = Pw.map(v => -v), sx = dot3(sd, right), syv = -dot3(sd, up), sz = -dot3(sd, fwd);
+        c.save(); c.translate(pr.x, pr.y);
+        c.beginPath(); c.arc(0, 0, R, 0, TAU); c.fillStyle = COL.earthNight; c.fill();
+        c.save(); c.rotate(Math.atan2(syv, sx)); litShape(c, R, (1 + sz) / 2); c.fillStyle = COL.earthDay; c.fill(); c.restore();
+        // 赤道
+        let prevP = null;
+        for (let i = 0; i <= 72; i++) {
+          const t = i / 72 * TAU, E = [Math.cos(t) * e1[0] + Math.sin(t) * e2[0], Math.cos(t) * e1[1] + Math.sin(t) * e2[1], Math.cos(t) * e1[2] + Math.sin(t) * e2[2]];
+          const q = { x: R * dot3(E, right), y: -R * dot3(E, up), z: dot3(E, fwd) };
+          if (prevP) { c.beginPath(); c.moveTo(prevP.x, prevP.y); c.lineTo(q.x, q.y); c.lineWidth = Math.max(1, R * 0.05); c.strokeStyle = q.z < 0 ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.22)'; c.stroke(); }
+          prevP = q;
+        }
+        // 地軸
+        c.lineWidth = Math.max(1.6, R * 0.1); c.strokeStyle = '#FFD66B'; c.lineCap = 'round';
+        [1, -1].forEach(sg => { c.beginPath(); c.moveTo(sg * axis[0] * R * 1.03 * 1, -sg * dot3(axis, up) * R * 1.03); c.lineTo(sg * dot3(axis, right) * R * 1.55, -sg * dot3(axis, up) * R * 1.55); c.stroke(); });
+        c.fillStyle = '#fff'; c.beginPath(); c.arc(dot3(axis, right) * R * 1.55, -dot3(axis, up) * R * 1.55, Math.max(2, R * 0.1), 0, TAU); c.fill();
+        // 臺北（正午時朝向太陽）
+        if (cur) {
+          const l = LOCS[state.loc], k = dot3(sd, axis), m = [sd[0] - k * axis[0], sd[1] - k * axis[1], sd[2] - k * axis[2]], ml = Math.hypot(m[0], m[1], m[2]) || 1;
+          const Q = [0, 1, 2].map(i => Math.cos(l.lat * RAD) * m[i] / ml + Math.sin(l.lat * RAD) * axis[i]);
+          if (dot3(Q, fwd) < 0) { c.beginPath(); c.arc(R * dot3(Q, right), -R * dot3(Q, up), Math.max(2.8, R * 0.13), 0, TAU); c.fillStyle = '#E4553B'; c.fill(); c.lineWidth = 1.2; c.strokeStyle = '#fff'; c.stroke(); }
+        }
+        c.restore();
+        if (cur) { c.beginPath(); c.arc(pr.x, pr.y, R * 1.2, 0, TAU); c.lineWidth = 1.4; c.strokeStyle = 'rgba(255,255,255,.55)'; c.setLineDash([3, 3]); c.stroke(); c.setLineDash([]); }
+        if (isMain) {
+          const top = pr.z > 0.5 * ce, y = top ? pr.y - R * 1.85 : pr.y + R * 1.7;
+          if (S) { halo(S.n, pr.x, y, fs * 1.05, '#fff', 'center', top ? 'bottom' : 'top'); halo(S.note, pr.x, y + (top ? -fs * 1.25 : fs * 1.25), fs * 0.8, S.col === '#4A6FD0' ? '#9DB5FF' : '#FFE0A0', 'center', top ? 'bottom' : 'top'); }
+          else halo(`今天 ${A.localParts(state.ms).m}/${A.localParts(state.ms).d}`, pr.x, y, fs * 1.0, '#fff', 'center', top ? 'bottom' : 'top');
+        }
+      } });
+    };
+    SEASONS.forEach(S => { const L = (S.lon + 180) * RAD; if (Math.abs(A.wrap180((L - lonE) * DEG)) >= 7) globe(L, Math.max(9, Ro * 0.07), false, S); });
+    const near = SEASONS.find(S => Math.abs(A.wrap180(((S.lon + 180) * RAD - lonE) * DEG)) < 7);
+    globe(lonE, Math.max(12, Ro * 0.095), true, near || null);
+    items.sort((a, b) => b.z - a.z).forEach(it => it.draw());
+  }
+
+  // 背影（半身）：站在畫面下方中央、面向畫面中央；頭的高度約在地平線＝眼睛高度
+  function drawBackFigure(c, cx, y0, fs, dark) {
+    const u = fs * 0.5, top = y0 - u * 0.25;
+    c.save(); c.globalAlpha = 0.66; c.fillStyle = dark ? '#05070F' : '#1B2133';
+    c.beginPath(); c.arc(cx, top + u * 1.0, u * 0.95, 0, TAU); c.fill();                       // 頭
+    c.beginPath(); c.moveTo(cx - u * 2.4, top + u * 3.2); c.bezierCurveTo(cx - u * 2.4, top + u * 2.0, cx - u * 1.2, top + u * 2.0, cx - u * 0.5, top + u * 1.95);
+    c.lineTo(cx + u * 0.5, top + u * 1.95); c.bezierCurveTo(cx + u * 1.2, top + u * 2.0, cx + u * 2.4, top + u * 2.0, cx + u * 2.4, top + u * 3.2);
+    c.closePath(); c.fill();                                                                   // 肩
+    c.restore();
+  }
+
+  /* ============================================================
+   * 步驟 6.5：地面視角（共用 3D 小工具＋全身人形）
+   * 座標：X=東、Y=北、Z=上；單位＝人的身高（1）。傾斜角固定，只能左右繞著人轉。
+   * 之後要加星空、銀河系等視角，可以重複使用 makeCam3 / fitCam3。
+   * ============================================================ */
+  const G_DOME = 3.3, G_RING = 2.1, G_PITCH = 30, G_DIST = 16;
+  const bearVec = (b, r = 1, z = 0) => [Math.sin(b * RAD) * r, Math.cos(b * RAD) * r, z];
+  const dirVec = (alt, az, r) => { const ca = Math.cos(alt * RAD); return [ca * Math.sin(az * RAD) * r, ca * Math.cos(az * RAD) * r, Math.sin(alt * RAD) * r]; };
+
+  // 相機：看向原點，從 bearing 的反方向、高度 pitch 往下看；foc＝焦距(px)，cx/cy＝畫面中心
+  function makeCam3(bearing, pitch, dist, foc, cx, cy) {
+    const b = bearing * RAD, p = pitch * RAD;
+    const fwd = [Math.sin(b) * Math.cos(p), Math.cos(b) * Math.cos(p), -Math.sin(p)];
+    const right = [Math.cos(b), -Math.sin(b), 0], up = cross(right, fwd);
+    const pos = [-fwd[0] * dist, -fwd[1] * dist, -fwd[2] * dist];
+    const proj = q => {
+      const d = [q[0] - pos[0], q[1] - pos[1], q[2] - pos[2]], z = dot(d, fwd), s = foc / Math.max(z, 0.5);
+      return { x: cx + dot(d, right) * s, y: cy - dot(d, up) * s, z, s };
+    };
+    return { proj, fwd, right, up, pos };
+  }
+  // 自動取景：讓天空圓頂（窄螢幕則只保證地面圓環）完整放進畫面
+  function fitCam3(bearing, W, H, narrow, top = 0, bot = 0) {
+    const c0 = makeCam3(bearing, G_PITCH, G_DIST, 1000, W / 2, 0);
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    const take = (p, useX) => { const q = c0.proj(p); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); if (useX) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); } };
+    take([0, 0, G_DOME * 1.04], false);
+    for (let i = 0; i < 72; i++) { take(bearVec(i * 5, G_DOME, 0), !narrow); take(bearVec(i * 5, G_RING + 1.0, 0), true); }
+    const avail = H - top - bot, k = Math.min((W * 0.95) / (x1 - x0), (avail * 0.97) / (y1 - y0));
+    return makeCam3(bearing, G_PITCH, G_DIST, 1000 * k, W / 2, top + avail / 2 - ((y0 + y1) / 2) * k);
+  }
+
+  const shadeHex = (hex, k) => (k >= 0 ? mixc(hex, '#FFFFFF', k) : mixc(hex, '#000000', -k));
+  // 兩端不同粗細的圓角柱（手腳、身體），沿著垂直軸線打光
+  function stadium(c, a, b, ra, rb, col) {
+    let dx = b.x - a.x, dy = b.y - a.y; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+    let nx = -dy, ny = dx; const sg = nx * -0.6 + ny * -0.8 >= 0 ? 1 : -1, lx = nx * sg, ly = ny * sg;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, r = Math.max(ra, rb, 0.5);
+    const g = c.createLinearGradient(mx + lx * r, my + ly * r, mx - lx * r, my - ly * r);
+    g.addColorStop(0, shadeHex(col, 0.24)); g.addColorStop(0.5, col); g.addColorStop(1, shadeHex(col, -0.3));
+    const th = Math.atan2(ny, nx);
+    c.beginPath();
+    c.moveTo(a.x + nx * ra, a.y + ny * ra); c.lineTo(b.x + nx * rb, b.y + ny * rb);
+    c.arc(b.x, b.y, rb, th, th - Math.PI, true);
+    c.lineTo(a.x - nx * ra, a.y - ny * ra);
+    c.arc(a.x, a.y, ra, th - Math.PI, th - 2 * Math.PI, true);
+    c.closePath(); c.fillStyle = g; c.fill();
+    c.lineWidth = 0.8; c.strokeStyle = 'rgba(15,18,30,.28)'; c.stroke();
+  }
+  function ball(c, q, r, col) {
+    const g = c.createRadialGradient(q.x - r * 0.38, q.y - r * 0.42, r * 0.08, q.x, q.y, r * 1.05);
+    g.addColorStop(0, shadeHex(col, 0.32)); g.addColorStop(0.55, col); g.addColorStop(1, shadeHex(col, -0.32));
+    c.beginPath(); c.arc(q.x, q.y, r, 0, TAU); c.fillStyle = g; c.fill();
+    c.lineWidth = 0.8; c.strokeStyle = 'rgba(15,18,30,.28)'; c.stroke();
+  }
+
+  // 全身小學生：珊瑚紅上衣、深藍長褲、靛藍書包（背面看得到書包、正面看得到臉）
+  const FIG = { skin: '#F1C4A0', hair: '#3A2B26', shirt: COL.person, pants: '#38456E', shoe: '#ECEAE4', pack: '#3F4A8A' };
+  function figureParts(c, cam, face, dayF) {
+    const fw = bearVec(face), rt = [Math.cos(face * RAD), -Math.sin(face * RAD), 0];
+    const T = (x, y, z) => [rt[0] * x + fw[0] * y, rt[1] * x + fw[1] * y, z];
+    const P = (x, y, z) => cam.proj(T(x, y, z));
+    const dim = -0.32 * (1 - dayF), C = col => shadeHex(col, dim);
+    const kr = dot(cam.right, rt), kf = dot(cam.right, fw);
+    const ew = (hw, hd) => Math.hypot(kr * hw, kf * hd);               // 橢圓身體在畫面上的半寬
+    const parts = [], s0 = P(0, 0, 0.5).s;
+    const add = (center, fn) => parts.push({ z: P(...center).z, fn });
+    for (const sx of [-1, 1]) {
+      const st = sx * 0.03;                                            // 一腳在前、一腳在後的站姿
+      add([sx * 0.057, st / 2, 0.25], () => stadium(c, P(sx * 0.057, 0, 0.46), P(sx * 0.06, st, 0.07), 0.059 * s0, 0.046 * s0, C(FIG.pants)));
+      add([sx * 0.06, st + 0.03, 0.04], () => stadium(c, P(sx * 0.06, st - 0.035, 0.04), P(sx * 0.06, st + 0.1, 0.035), 0.043 * s0, 0.04 * s0, C(FIG.shoe)));
+      add([sx * 0.13, -st / 2, 0.6], () => {
+        const sw = -st * 0.6;                                          // 手和腳反方向擺
+        stadium(c, P(sx * 0.118, 0, 0.73), P(sx * 0.14, sw * 0.4, 0.6), 0.046 * s0, 0.041 * s0, C(FIG.shirt));
+        stadium(c, P(sx * 0.14, sw * 0.4, 0.6), P(sx * 0.145, sw + 0.025, 0.495), 0.034 * s0, 0.03 * s0, C(FIG.skin));
+        ball(c, P(sx * 0.146, sw + 0.03, 0.47), 0.038 * s0, C(FIG.skin));
+      });
+    }
+    add([0, 0, 0.6], () => {
+      stadium(c, P(0, 0, 0.78), P(0, 0, 0.83), 0.036 * s0, 0.036 * s0, C(FIG.skin));
+      stadium(c, P(0, 0, 0.47), P(0, 0, 0.73), ew(0.088, 0.062) * P(0, 0, 0.6).s, ew(0.114, 0.07) * P(0, 0, 0.7).s, C(FIG.shirt));
+      // 衣服下擺的深色線，讓上衣和褲子分得更清楚
+      const a = P(0, 0, 0.47), r = ew(0.088, 0.062) * a.s;
+      c.beginPath(); c.moveTo(a.x - r * 0.95, a.y + 1); c.lineTo(a.x + r * 0.95, a.y + 1); c.lineWidth = Math.max(1, 0.012 * s0); c.strokeStyle = 'rgba(20,20,40,.35)'; c.stroke();
+    });
+    add([0, -0.105, 0.62], () => {                                     // 書包
+      const pr = ew(0.078, 0.045) * s0;
+      stadium(c, P(0, -0.105, 0.665), P(0, -0.105, 0.57), pr, pr, C(FIG.pack));
+      stadium(c, P(0, -0.14, 0.61), P(0, -0.14, 0.585), pr * 0.62, pr * 0.62, C(shadeHex(FIG.pack, 0.18)));   // 外袋
+    });
+    for (const sx of [-1, 1]) add([sx * 0.07, 0.062, 0.65], () => stadium(c, P(sx * 0.068, 0.06, 0.74), P(sx * 0.078, 0.063, 0.57), 0.013 * s0, 0.013 * s0, C(shadeHex(FIG.pack, -0.12))));   // 背帶（正面才看得到）
+    add([0, 0, 0.905], () => {   // 頭
+      const hc = P(0, 0, 0.905), r = 0.116 * hc.s;
+      for (const sx of [-1, 1]) ball(c, P(sx * 0.112, 0, 0.9), 0.03 * hc.s, C(FIG.skin));
+      ball(c, hc, r, C(FIG.skin));
+      const tl = Math.hypot(cam.pos[0], cam.pos[1]) || 1;
+      const f = -(fw[0] * cam.pos[0] + fw[1] * cam.pos[1]) / tl * -1;   // +1 正面朝向鏡頭、-1 背面
+      const bk = P(-fw[0] * 0.1, -fw[1] * 0.1, 0.905);
+      let bx = bk.x - hc.x, by = bk.y - hc.y; const bl = Math.hypot(bx, by); if (bl < 1e-3) { bx = 0; by = -1; } else { bx /= bl; by /= bl; }
+      const hair = C(FIG.hair), hg = c.createLinearGradient(hc.x - r, hc.y - r, hc.x + r, hc.y + r);
+      hg.addColorStop(0, shadeHex(hair, 0.22)); hg.addColorStop(1, shadeHex(hair, -0.2));
+      c.save(); c.beginPath(); c.arc(hc.x, hc.y, r * 1.02, 0, TAU); c.clip(); c.fillStyle = hg;
+      // 頭頂＋瀏海（弧形髮線）
+      c.beginPath(); c.moveTo(hc.x - 1.3 * r, hc.y - 1.3 * r); c.lineTo(hc.x + 1.3 * r, hc.y - 1.3 * r); c.lineTo(hc.x + 1.3 * r, hc.y - 0.02 * r);
+      c.quadraticCurveTo(hc.x, hc.y - 0.78 * r, hc.x - 1.3 * r, hc.y - 0.02 * r); c.closePath(); c.fill();
+      // 後腦（f<0 越背對越多，露出脖子）
+      c.save(); c.beginPath(); c.rect(hc.x - 2 * r, hc.y - 2 * r, 4 * r, 2 * r + r * (0.5 + 0.28 * clamp(-f, 0, 1))); c.clip();
+      c.translate(hc.x, hc.y); c.rotate(Math.atan2(by, bx)); c.beginPath(); c.rect(1.05 * f * r, -2 * r, 3 * r, 4 * r); c.fill(); c.restore();
+      // 髮絲光澤
+      c.beginPath(); c.arc(hc.x - r * 0.15, hc.y - r * 0.15, r * 0.82, Math.PI * 1.08, Math.PI * 1.45); c.lineWidth = Math.max(1, r * 0.09); c.strokeStyle = 'rgba(255,255,255,.18)'; c.stroke();
+      c.restore();
+      if (f > 0.12) {   // 臉（正面才畫）
+        const a = clamp((f - 0.12) / 0.5, 0, 1);
+        c.globalAlpha = a; c.fillStyle = '#2B2220';
+        [P(-0.042, 0.105, 0.908), P(0.042, 0.105, 0.908)].forEach(q => { c.beginPath(); c.ellipse(q.x, q.y, Math.max(1.1, 0.016 * hc.s) * Math.max(0.35, f), Math.max(1.5, 0.022 * hc.s), 0, 0, TAU); c.fill(); });
+        c.strokeStyle = 'rgba(58,43,38,.75)'; c.lineWidth = Math.max(1, 0.008 * hc.s); c.lineCap = 'round';
+        for (const sx of [-1, 1]) { const q0 = P(sx * 0.062, 0.1, 0.944), q1 = P(sx * 0.024, 0.108, 0.95); c.beginPath(); c.moveTo(q0.x, q0.y); c.lineTo(q1.x, q1.y); c.stroke(); }
+        const m0 = P(-0.03, 0.11, 0.872), m1 = P(0.03, 0.11, 0.872), m2 = P(0, 0.118, 0.855);
+        c.beginPath(); c.moveTo(m0.x, m0.y); c.quadraticCurveTo(m2.x, m2.y + 0.012 * hc.s, m1.x, m1.y); c.strokeStyle = '#7A3B2E'; c.stroke(); c.lineCap = 'butt';
+        c.fillStyle = 'rgba(235,110,100,.28)';
+        [P(-0.07, 0.092, 0.88), P(0.07, 0.092, 0.88)].forEach(q => { c.beginPath(); c.arc(q.x, q.y, 0.022 * hc.s, 0, TAU); c.fill(); });
+        c.globalAlpha = 1;
+      }
+    });
+    parts.sort((a, b) => b.z - a.z);
+    return parts;
+  }
+
+  /* ============================================================
+   * 地面視角主程式
+   * ============================================================ */
+  function renderGround(cv, isMain) {
+    const Q = prep(cv); if (!Q) return; const { c, W, H } = Q;
+    const loc = LOCS[state.loc], ms = state.ms, day = ensureDay();
+    const sun = A.sunPos(ms, loc.lat, loc.lon), moon = A.moonPos(ms, loc.lat, loc.lon);
+    const dayF = clamp((sun.alt + 6) / 12, 0, 1), light = dayF < 0.5;
+    const bigK = document.documentElement.classList.contains('big') ? 1.25 : 1;
+    const fs = clamp(W * 0.0175 * (isMain ? 1 : 1.3), 9, 24) * (isMain ? bigK : 1);
+    const phone = W < 620, mTop = !isMain ? 8 : phone ? 150 : 64, mBot = !isMain ? 8 : phone ? 215 : W <= 1100 ? 104 : 100;
+    const cam = fitCam3(state.gb, W, H, W < 560 || H > W * 1.1, mTop, mBot), pj = p => cam.proj(p);
+    const gtxt = dayF > 0.45 ? '#16210F' : '#E6EAF5', gtxt2 = dayF > 0.45 ? 'rgba(22,33,15,.72)' : 'rgba(230,234,245,.72)';
+
+    // 天空背景
+    const [zen, hor] = skyColors(sun.alt), yFar = pj(bearVec(state.gb, G_DOME, 0)).y;
+    const bg = c.createLinearGradient(0, 0, 0, H);
+    const fy = clamp(yFar / H, 0.05, 0.95);
+    bg.addColorStop(0, zen); bg.addColorStop(fy, hor); bg.addColorStop(1, mixc(hor, zen, 0.65));
+    c.fillStyle = bg; c.fillRect(0, 0, W, H);
+    const starA = state.stars ? clamp((-sun.alt - 3) / 12, 0, 1) : 0;
+    if (starA > 0) for (const st of STARS) {
+      const p = A.starAltAz(st, ms, loc.lat, loc.lon); if (p.alt < 1) continue;
+      const q = pj(dirVec(p.alt, p.az, G_DOME * 1.02));
+      c.fillStyle = `rgba(255,255,240,${starA * clamp(p.alt / 8, 0, 1) * (0.35 + 0.65 * st.b)})`;
+      c.beginPath(); c.arc(q.x, q.y, (0.6 + st.b * 1.5) * (isMain ? 1 : 0.8), 0, TAU); c.fill();
+    }
+
+    // 太陽、月亮：位置＝天空圓頂上的方向
+    const sunP = dirVec(sun.alt, sun.az, G_DOME), moonP = dirVec(moon.alt, moon.az, G_DOME);
+    const sq = pj(sunP), mq = pj(moonP);
+    const Rs = Math.max(0.36 * sq.s, 7), Rm = Math.max(0.4 * mq.s, 8);
+    const moonBrg = Math.atan2(sq.x - mq.x, -(sq.y - mq.y)) * DEG;
+    // 日月穿過地平線：亮度與虛線外框跟著高度連續漸變（-5° 到 +5°），不再有「前後換邊」的跳動
+    const fadeOf = alt => { const u = clamp((alt + 5) / 10, 0, 1); return u * u * (3 - 2 * u); };
+    const deepOf = alt => clamp((alt + 30) / 25, 0, 1);   // 低於 −5° 之後繼續淡出，到 −30° 完全看不見，避免夜裡畫面底下一直掛著太陽
+    const drawSunB = () => {
+      const f = fadeOf(sun.alt); c.save(); c.globalAlpha = (0.3 + 0.7 * f) * deepOf(sun.alt);
+      const col = mixc('#FF7B39', '#FFC93C', clamp((sun.alt - 2) / 23, 0, 1));
+      const gl = c.createRadialGradient(sq.x, sq.y, Rs * 0.6, sq.x, sq.y, Rs * 3.6); gl.addColorStop(0, rgba(col, 0.42 * f)); gl.addColorStop(1, rgba(col, 0));
+      c.fillStyle = gl; c.fillRect(sq.x - Rs * 4, sq.y - Rs * 4, Rs * 8, Rs * 8);
+      c.beginPath(); c.arc(sq.x, sq.y, Rs, 0, TAU); c.fillStyle = col; c.fill(); c.lineWidth = 1; c.strokeStyle = 'rgba(160,90,10,.4)'; c.stroke();
+      if (f < 1) { c.globalAlpha = 0.9 * (1 - f) * deepOf(sun.alt); c.beginPath(); c.arc(sq.x, sq.y, Rs + 3, 0, TAU); c.setLineDash([4, 4]); c.lineWidth = 1.4; c.strokeStyle = 'rgba(226,163,59,1)'; c.stroke(); c.setLineDash([]); }
+      c.restore();
+    };
+    const drawMoonB = () => {
+      const f = fadeOf(moon.alt); c.save(); c.globalAlpha = (0.35 + 0.65 * f) * deepOf(moon.alt);
+      { const g = c.createRadialGradient(mq.x, mq.y, Rm * 0.8, mq.x, mq.y, Rm * 3.4); g.addColorStop(0, `rgba(235,235,255,${0.28 * f * (1 - dayF) * (0.4 + 0.6 * moon.k)})`); g.addColorStop(1, 'rgba(235,235,255,0)'); c.fillStyle = g; c.fillRect(mq.x - Rm * 4, mq.y - Rm * 4, Rm * 8, Rm * 8); }
+      drawMoon(c, mq.x, mq.y, Rm, moon.k, moonBrg, dayF);
+      if (f < 1) { c.globalAlpha = 0.9 * (1 - f) * deepOf(moon.alt); c.beginPath(); c.arc(mq.x, mq.y, Rm + 3, 0, TAU); c.setLineDash([4, 4]); c.strokeStyle = 'rgba(200,206,240,1)'; c.lineWidth = 1.2; c.stroke(); c.setLineDash([]); }
+      c.restore();
+    };
+
+    // 地面（半透明）：外圈＝遠方地面，內圈＝人站的地方（有方位刻度）
+    const ringPts = (r, z = 0, n = 120) => { const a = []; for (let i = 0; i < n; i++) a.push(pj(bearVec(i * 360 / n, r, z))); return a; };
+    const poly = pts => { c.beginPath(); pts.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); c.closePath(); };
+    const gOut = mixc('#18202E', '#86A07A', dayF), gIn = mixc('#223048', '#B2C9A0', dayF);
+    c.save(); c.globalAlpha = 0.8; poly(ringPts(G_DOME)); c.fillStyle = gOut; c.fill(); c.restore();
+    c.save(); c.globalAlpha = 0.95; poly(ringPts(G_RING)); c.fillStyle = gIn; c.fill(); c.restore();
+    c.strokeStyle = light ? 'rgba(255,255,255,.32)' : 'rgba(255,255,255,.8)'; c.lineWidth = 1.4; poly(ringPts(G_DOME)); c.stroke();
+    c.strokeStyle = gtxt2; c.lineWidth = 1.2; poly(ringPts(G_RING)); c.stroke();
+    c.lineWidth = 1;
+    for (let b = 0; b < 360; b += 15) {          // 刻度
+      const l = b % 90 === 0 ? 0.3 : b % 45 === 0 ? 0.2 : 0.1;
+      const a = pj(bearVec(b, G_RING)), z = pj(bearVec(b, G_RING + l)); c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(z.x, z.y); c.stroke();
+    }
+    c.strokeStyle = light ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.28)';
+    for (let b = 0; b < 360; b += 45) { const a = pj([0, 0, 0]), z = pj(bearVec(b, G_RING)); c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(z.x, z.y); c.stroke(); }
+
+    // 方位字
+    const DN = ['北', '東', '南', '西'];
+    for (let i = 0; i < 4; i++) {
+      const q = pj(bearVec(i * 90, G_RING + 0.62)); c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.font = `700 ${fs * 1.45}px ${FONT}`; c.lineWidth = 3; c.lineJoin = 'round'; c.strokeStyle = light ? 'rgba(10,16,41,.55)' : 'rgba(255,255,255,.55)';
+      c.strokeText(DN[i], q.x, q.y); c.fillStyle = gtxt; c.fillText(DN[i], q.x, q.y);
+    }
+    if (isMain) for (let b = 45; b < 360; b += 90) {
+      const q = pj(bearVec(b, G_RING + 0.55)); c.font = `400 ${fs * 0.9}px ${FONT}`; c.fillStyle = gtxt2; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(DIRS8[b / 45], q.x, q.y);
+    }
+
+    // 天空圓頂骨架（子午線、東西線）與日月軌跡
+    c.lineWidth = 1; c.strokeStyle = light ? 'rgba(220,228,255,.22)' : 'rgba(255,255,255,.55)'; c.setLineDash([2, 5]);
+    for (const az of [0, 90]) {
+      c.beginPath(); for (let a = 0; a <= 180; a += 4) { const q = pj(a <= 90 ? dirVec(a, az, G_DOME) : dirVec(180 - a, az + 180, G_DOME)); a ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y); } c.stroke();
+    }
+    c.setLineDash([]);
+    if (state.trail) {
+      const trail = (arr, color) => { c.beginPath(); let on = false; for (const t of arr) { if (t.alt < 0) { on = false; continue; } const q = pj(dirVec(t.alt, t.az, G_DOME)); on ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y); on = true; } c.strokeStyle = color; c.lineWidth = 1.6; c.setLineDash([1, 5]); c.lineCap = 'round'; c.stroke(); c.setLineDash([]); c.lineCap = 'butt'; };
+      trail(day.moonTrail, light ? 'rgba(214,222,255,.8)' : 'rgba(80,96,160,.7)'); trail(day.sunTrail, COL.sun);
+    }
+
+    if (state.mode === 'season') {   // 三條季節路線畫在天空圓頂上，加上今天這一條
+      const D = buildSeason(); c.lineJoin = 'round'; c.lineCap = 'round';
+      [[D[1], '夏至'], [D[0], '春分、秋分'], [D[3], '冬至']].forEach(([it, name]) => {
+        c.strokeStyle = it.S.col; c.lineWidth = isMain ? 3 : 2; c.beginPath(); let pen = false;
+        it.path.forEach(q => { if (q.alt < -0.5) { pen = false; return; } const z = pj(dirVec(Math.max(q.alt, 0), q.az, G_DOME)); pen ? c.lineTo(z.x, z.y) : c.moveTo(z.x, z.y); pen = true; });
+        c.stroke();
+        if (isMain) {   // 正午最高點打點並標高度；路線名稱標在日出那一端，三條才不會疊在一起
+          const z = pj(dirVec(it.noonAlt, it.noonAz, G_DOME)); c.beginPath(); c.arc(z.x, z.y, 4.5, 0, TAU); c.fillStyle = it.S.col; c.fill();
+          label(c, `${Math.round(it.noonAlt)}°`, z.x + 9, z.y, fs * 0.85, light, 'left', 'middle');
+          const r0 = it.path.find(q => q.alt >= -0.5);
+          if (r0) { const rz = pj(dirVec(Math.max(r0.alt, 0), r0.az, G_DOME)); label(c, name, rz.x, rz.y + fs * 0.6, fs * 0.9, light, 'center', 'top'); }
+        }
+      });
+      c.setLineDash([2, 5]); c.lineWidth = 2; c.strokeStyle = light ? 'rgba(255,255,255,.9)' : 'rgba(30,34,48,.8)'; c.beginPath(); let pen2 = false;
+      day.sunTrail.forEach(q => { if (q.alt < 0) { pen2 = false; return; } const z = pj(dirVec(q.alt, q.az, G_DOME)); pen2 ? c.lineTo(z.x, z.y) : c.moveTo(z.x, z.y); pen2 = true; });
+      c.stroke(); c.setLineDash([]); c.lineCap = 'butt';
+    }
+
+    // 太陽影子（高度越低影子越長；人身高＝1，所以影長＝1/tan(高度)）
+    const fwP = bearVec(state.face);
+    if (sun.alt > 0.05) {
+      const L = Math.min(1 / Math.tan(sun.alt * RAD), 5.5), shA = clamp(sun.alt / 5, 0, 1), dirB = sun.az + 180;
+      const tip = [Math.sin(dirB * RAD) * L, Math.cos(dirB * RAD) * L, 0];
+      const px = [Math.cos(dirB * RAD) * 0.11, -Math.sin(dirB * RAD) * 0.11, 0];
+      const a = pj([-px[0], -px[1], 0]), b = pj([px[0], px[1], 0]), t1 = pj([tip[0] + px[0] * 0.8, tip[1] + px[1] * 0.8, 0]), t2 = pj([tip[0] - px[0] * 0.8, tip[1] - px[1] * 0.8, 0]);
+      const g0 = pj([0, 0, 0]), g1 = pj(tip), sg = c.createLinearGradient(g0.x, g0.y, g1.x, g1.y);
+      sg.addColorStop(0, `rgba(10,14,25,${0.42 * shA})`); sg.addColorStop(1, `rgba(10,14,25,${0.1 * shA})`);
+      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(t2.x, t2.y); c.lineTo(t1.x, t1.y); c.lineTo(b.x, b.y); c.closePath(); c.fillStyle = sg; c.fill();
+    }
+    { const e = ringPts(0.22, 0, 36); poly(e); c.fillStyle = 'rgba(10,14,25,.28)'; c.fill(); }
+
+    // 面向箭頭（貼在地面）
+    {
+      const f0 = pj(bearVec(state.face, 0.3)), f1 = pj(bearVec(state.face, G_RING * 0.8));
+      c.strokeStyle = '#2DB38A'; c.fillStyle = '#2DB38A'; c.lineWidth = Math.max(2.5, 0.05 * f0.s); c.lineCap = 'round';
+      c.beginPath(); c.moveTo(f0.x, f0.y); c.lineTo(f1.x, f1.y); c.stroke(); c.lineCap = 'butt';
+      const tp = bearVec(state.face, G_RING * 0.8 + 0.3), l1 = bearVec(state.face + 90, 0.16), tb = bearVec(state.face, G_RING * 0.8);
+      const A1 = pj(tp), B1 = pj([tb[0] + l1[0], tb[1] + l1[1], 0]), B2 = pj([tb[0] - l1[0], tb[1] - l1[1], 0]);
+      c.beginPath(); c.moveTo(A1.x, A1.y); c.lineTo(B1.x, B1.y); c.lineTo(B2.x, B2.y); c.closePath(); c.fill();
+      if (isMain) { const lp = pj(bearVec(state.face, G_RING * 0.5, 0)), rp = pj(bearVec(state.face + 90, 0.55)), r0 = pj([0, 0, 0]); label(c, '面向', lp.x + (rp.x - r0.x), lp.y + (rp.y - r0.y), fs * 0.95, light, 'center', 'middle'); }
+    }
+
+    // 方位角與高度角：地面上的角＋天空圓頂上的弧
+    const helper = (o, col, named) => {
+      const ha = clamp(o.alt / 6, 0, 1); if (!state.sight || ha <= 0) return;
+      c.save(); c.globalAlpha = ha;
+      const r0 = pj([0, 0, 0]), r1 = pj(bearVec(o.az, G_DOME));
+      c.strokeStyle = col; c.lineWidth = 1.6; c.setLineDash([5, 4]); c.beginPath(); c.moveTo(r0.x, r0.y); c.lineTo(r1.x, r1.y); c.stroke(); c.setLineDash([]);
+      c.lineWidth = 3; c.beginPath(); for (let a = 0; a <= o.alt; a += 2) { const q = pj(dirVec(Math.min(a, o.alt), o.az, G_DOME)); a ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y); } c.stroke();
+      c.lineWidth = 2.6; c.beginPath(); const ar = G_RING * 0.5; for (let b = 0; b <= o.az; b += 3) { const q = pj(bearVec(Math.min(b, o.az), ar)); b ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y); } c.stroke();
+      if (named && isMain) {
+        const qa = pj(bearVec(o.az / 2, ar + 0.5)), qh = pj(dirVec(o.alt / 2, o.az, G_DOME * 1.0));
+        label(c, `方位 ${Math.round(o.az) % 360}°`, qa.x, qa.y, fs * 0.95, light);
+        label(c, `高度 ${Math.round(o.alt)}°`, qh.x + fs * 0.6, qh.y, fs * 0.95, light, 'left', 'middle');
+      }
+      c.restore();
+    };
+    const named = state.mode === 'moon' ? 'moon' : 'sun';
+    helper(sun, COL.sun, named === 'sun'); helper(moon, '#8E93B5', named === 'moon');
+
+    // 人與日月的前後順序
+    const parts = figureParts(c, cam, state.face, dayF), zP = pj([0, 0, 0.5]).z;
+    const bodies = [];
+    bodies.push({ z: sq.z, fn: drawSunB }, { z: mq.z, fn: drawMoonB });
+    bodies.filter(b => b.z > zP).forEach(b => b.fn());
+    parts.forEach(p => p.fn());
+    bodies.filter(b => b.z <= zP).forEach(b => b.fn());
+
+    // 視線：眼睛到日月
+    if (state.sight) {
+      const eye = pj([0, 0, 1.04]); c.lineWidth = 1.2; c.setLineDash([3, 5]);
+      const sa = clamp(sun.alt / 6, 0, 1), ma = clamp(moon.alt / 6, 0, 1);
+      if (sa > 0) { c.strokeStyle = `rgba(226,163,59,${0.9 * sa})`; c.beginPath(); c.moveTo(eye.x, eye.y); c.lineTo(sq.x, sq.y); c.stroke(); }
+      if (ma > 0) { c.strokeStyle = `rgba(160,166,205,${0.9 * ma})`; c.beginPath(); c.moveTo(eye.x, eye.y); c.lineTo(mq.x, mq.y); c.stroke(); }
+      c.setLineDash([]);
+    }
+    if (isMain) {
+      const la = o => fadeOf(o.alt) > 0.05 ? fadeOf(o.alt) : 0;
+      c.save(); c.globalAlpha = la(sun); if (la(sun)) label(c, '太陽', sq.x, sq.y - Rs - 5, fs, light && sun.alt < 5); c.restore();
+      c.save(); c.globalAlpha = la(moon); if (la(moon)) label(c, '月亮', mq.x, mq.y - Rm - 5, fs, light); c.restore();
+      // 畫面外的日月：邊緣標籤，點一下把鏡頭轉過去
+      chips = [];
+      const cr = cvMain.getBoundingClientRect(), ir = $('#hudInfo').getBoundingClientRect(), pr = cvPip.getBoundingClientRect();
+      const edge = (name, az, q, color, show) => {
+        if (!show || (q.x > 8 && q.x < W - 8 && q.y > 8 && q.y < H - 8)) return;
+        const left = q.x < W / 2; let minY = fs * 3;
+        if (left) minY = Math.max(minY, ir.bottom - cr.top + fs * 1.4); else if (state.pip) minY = Math.max(minY, pr.bottom - cr.top + fs * 1.4);
+        const y = clamp(q.y, minY, H - fs * 7), txt = left ? '‹ ' + name : name + ' ›';
+        c.font = `700 ${fs}px ${FONT}`; const w = c.measureText(txt).width + fs * 1.4, h = fs * 2.1, x = left ? 8 : W - 8 - w;
+        c.fillStyle = light ? 'rgba(20,28,60,.86)' : 'rgba(247,246,243,.94)'; rr(c, x, y - h / 2, w, h, h / 2); c.fill(); c.lineWidth = 1; c.strokeStyle = color; c.stroke();
+        c.fillStyle = light ? '#F2F2F7' : '#1E2230'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, x + w / 2, y + 1);
+        chips.push({ x, y: y - h / 2, w, h, az });
+      };
+      edge('太陽', sun.az, sq, COL.sun, true); edge('月亮', moon.az, mq, '#8E93B5', true);
+    } else pipTag(c, '地面視角 ⇄', 11);
+  }
+
+  /* ============================================================
+   * 步驟 3：量方位與高度角（瞄準器、側視／俯視量角器、任務卡）
+   * ============================================================ */
+  const revealed = { ms: null };
+  function drawMeasure(c, W, H, s, xOf, yOf, y0, fs, sun, moon) {
+    const narrow = W < 620;
+    const u = narrow ? 0.72 : clamp(W / 1280, 0.8, 1.3) * (document.documentElement.classList.contains('big') ? 1.15 : 1);
+    const cr = cvMain.getBoundingClientRect();
+    const topY = $('.topbar').getBoundingClientRect().bottom - cr.top + 8;
+    const pr = state.panel ? $('#panel').getBoundingClientRect() : null;
+    const right = pr ? W - pr.left + 12 : 12;
+    const halo = (fn, col, w, dash) => { c.save(); c.setLineDash(dash || []); c.lineCap = 'round'; c.lineWidth = w + 3; c.strokeStyle = 'rgba(255,255,255,.9)'; fn(); c.stroke(); c.lineWidth = w; c.strokeStyle = col; fn(); c.stroke(); c.restore(); };
+    const CORAL = '#D2452E';
+    const tag = (text, x, y, align) => {
+      c.font = `700 ${fs}px ${FONT}`; const w = c.measureText(text).width + fs * 1.1, h = fs * 1.9;
+      const lx = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
+      const px = clamp(lx, 4, W - w - 4), py = Math.max(topY, y - h);
+      c.fillStyle = 'rgba(247,246,243,.96)'; rr(c, px, py, w, h, h / 2); c.fill(); c.lineWidth = 1; c.strokeStyle = CORAL; c.stroke();
+      c.fillStyle = '#1E2230'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, px + w / 2, py + h / 2 + 1);
+    };
+    // 答案圈
+    if (revealed.ms === state.ms && state.task !== 1) {
+      const t = state.task === 2 ? moon : sun;
+      if (t.alt > 0) {
+        const tx = xOf(t.az), ty = yOf(t.alt);
+        c.save(); c.setLineDash([6, 5]); c.lineWidth = 3; c.strokeStyle = '#fff'; c.beginPath(); c.arc(tx, ty, 26 * u, 0, TAU); c.stroke(); c.restore();
+        tag('答案', tx, ty - 30 * u, 'center');
+      }
+    }
+    if (!state.aim) {
+      c.font = `700 ${fs}px ${FONT}`; const t = '點一下天空，放上瞄準器', w = c.measureText(t).width + fs * 2, h = fs * 2.3;
+      const py = y0 - 70 * u - h; c.fillStyle = 'rgba(247,246,243,.95)'; rr(c, W / 2 - w / 2, py, w, h, h / 2); c.fill();
+      c.fillStyle = '#1E2230'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(t, W / 2, py + h / 2 + 1);
+      return;
+    }
+    const a = state.aim, x = xOf(a.az), y = yOf(a.alt), alt = Math.round(a.alt), az = Math.round(A.n360(a.az)) % 360;
+    halo(() => { c.beginPath(); c.moveTo(x, y); c.lineTo(x, y0); }, CORAL, 1.8, [6, 5]);
+    halo(() => { c.beginPath(); c.moveTo(0, y); c.lineTo(x, y); }, CORAL, 1.8, [6, 5]);
+    halo(() => { c.beginPath(); c.arc(x, y, 13 * u, 0, TAU); }, CORAL, 2.4);
+    halo(() => { c.beginPath(); c.moveTo(x - 22 * u, y); c.lineTo(x - 7 * u, y); c.moveTo(x + 7 * u, y); c.lineTo(x + 22 * u, y); c.moveTo(x, y - 22 * u); c.lineTo(x, y - 7 * u); c.moveTo(x, y + 7 * u); c.lineTo(x, y + 22 * u); }, CORAL, 2);
+    if (x < W - 200 * u) tag(`高度角 ${alt}°`, x + 26 * u, y - 4 * u, 'left'); else tag(`高度角 ${alt}°`, x - 26 * u, y - 4 * u, 'right');
+    tag(`方位 ${az}°`, x, y0 - 10, 'center');
+    c.fillStyle = CORAL; c.beginPath(); c.arc(x, y0, 4.5, 0, TAU); c.fill();
+    // 側視量角器（高度角）
+    const w1 = 232 * u, h1 = 150 * u, bx = narrow ? 8 : W - right - w1, sy = narrow ? y0 - h1 - 36 * u : topY;
+    c.fillStyle = 'rgba(247,246,243,.96)'; rr(c, bx, sy, w1, h1, 12); c.fill(); c.lineWidth = 0.9; c.strokeStyle = '#CFCBC0'; c.stroke();
+    c.fillStyle = '#1E2230'; c.font = `700 ${12.5 * u}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'top'; c.fillText('從側面看：高度角', bx + 12 * u, sy + 9 * u);
+    const Ox = bx + 30 * u, Oy = sy + h1 - 28 * u, L = 150 * u, al = clamp(a.alt, 0, 90) * RAD;
+    c.strokeStyle = '#6B7080'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(Ox - 14 * u, Oy); c.lineTo(Ox + L + 20 * u, Oy); c.stroke();
+    c.setLineDash([3, 4]); c.beginPath(); c.moveTo(Ox, Oy); c.lineTo(Ox, Oy - 86 * u); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#5B6070'; c.font = `400 ${11 * u}px ${FONT}`; c.textBaseline = 'top'; c.fillText('地平線', Ox + L - 18 * u, Oy + 4 * u); c.textBaseline = 'bottom'; c.fillText('天頂 90°', Ox + 5 * u, Oy - 78 * u);
+    c.strokeStyle = CORAL; c.lineWidth = 2.4; c.beginPath(); c.moveTo(Ox, Oy); c.lineTo(Ox + L * Math.cos(al) * 0.9, Oy - L * Math.sin(al) * 0.9); c.stroke();
+    c.beginPath(); c.arc(Ox, Oy, 44 * u, -al, 0); c.lineWidth = 3; c.stroke();
+    c.fillStyle = CORAL; c.beginPath(); c.arc(Ox, Oy, 4.5, 0, TAU); c.fill();
+    c.fillStyle = '#E2A33B'; c.beginPath(); c.arc(Ox + L * Math.cos(al) * 0.9, Oy - L * Math.sin(al) * 0.9, 6 * u, 0, TAU); c.fill();
+    c.fillStyle = '#1E2230'; c.font = `700 ${14 * u}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(`${alt}°`, Ox + 50 * u, Oy - Math.min(24 * u, 6 * u + al * 20 * u));
+    // 俯視量角器（方位）
+    const w2 = 232 * u, h2 = narrow ? h1 : 184 * u, bx2 = narrow ? bx + w1 + 8 : bx, by = narrow ? sy : topY + h1 + 10 * u, Cx = bx2 + w2 / 2, Cy = by + h2 / 2 + 10 * u, R = 58 * u;
+    c.fillStyle = 'rgba(247,246,243,.96)'; rr(c, bx2, by, w2, h2, 12); c.fill(); c.lineWidth = 0.9; c.strokeStyle = '#CFCBC0'; c.stroke();
+    c.fillStyle = '#1E2230'; c.font = `700 ${12.5 * u}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'top'; c.fillText('從上面看：方位（北在上）', bx2 + 12 * u, by + 9 * u);
+    c.strokeStyle = '#9AA0B0'; c.lineWidth = 1.2; c.beginPath(); c.arc(Cx, Cy, R, 0, TAU); c.stroke();
+    c.font = `700 ${13 * u}px ${FONT}`; c.fillStyle = '#1E2230'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    [['北', 0, -1], ['東', 1, 0], ['南', 0, 1], ['西', -1, 0]].forEach(([t, dx, dy]) => c.fillText(t, Cx + dx * (R + 14 * u), Cy + dy * (R + 12 * u)));
+    for (let k = 0; k < 8; k++) { const th = k * 45 * RAD; c.beginPath(); c.moveTo(Cx + Math.sin(th) * R * 0.88, Cy - Math.cos(th) * R * 0.88); c.lineTo(Cx + Math.sin(th) * R, Cy - Math.cos(th) * R); c.stroke(); }
+    const th = A.n360(a.az) * RAD;
+    c.strokeStyle = CORAL; c.lineWidth = 2.4; c.beginPath(); c.moveTo(Cx, Cy); c.lineTo(Cx + Math.sin(th) * R, Cy - Math.cos(th) * R); c.stroke();
+    c.beginPath(); c.arc(Cx, Cy, 28 * u, -Math.PI / 2, -Math.PI / 2 + th); c.lineWidth = 3; c.stroke();
+    c.fillStyle = CORAL; c.beginPath(); c.arc(Cx, Cy, 4.5, 0, TAU); c.fill();
+    c.fillStyle = '#E2A33B'; c.beginPath(); c.arc(Cx + Math.sin(th) * R, Cy - Math.cos(th) * R, 6 * u, 0, TAU); c.fill();
+    c.fillStyle = '#1E2230'; c.font = `700 ${14 * u}px ${FONT}`; c.textAlign = 'center'; c.fillText(`${az}°`, Cx + Math.sin(th / 2) * 44 * u, Cy - Math.cos(th / 2) * 44 * u);
+  }
+
+  /* ============================================================
+   * 太空視角（3D，Canvas 自寫投影）
+   * 座標：太陽固定在 +X（畫面右側），黃極為 +Z。課本視角＝從黃極上方俯視。
+   * ============================================================ */
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const add = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+  const eqVec = (ra, dec) => [Math.cos(dec) * Math.cos(ra), Math.cos(dec) * Math.sin(ra), Math.sin(dec)];
+
+  function camXform(p) {        // 場景座標 → 相機座標（x 右、y 上、z 朝向觀看者）
+    const ya = spaceCam.yaw * RAD, ca = Math.cos(ya), sa = Math.sin(ya);
+    const x1 = p[0] * ca - p[1] * sa, y1 = p[0] * sa + p[1] * ca, z1 = p[2];
+    const a = spaceCam.a * RAD, cA = Math.cos(a), sA = Math.sin(a);
+    return [x1, y1 * cA + z1 * sA, -y1 * sA + z1 * cA];
+  }
+
+
+  // 放大看月亮：從北方上空看，亮面朝太陽（右），面向地球的半邊用藍弧標出，兩者重疊處＝你看到的月相
+  function drawMoonCard(c, W, H, o) {
+    const sc = clamp(W / 1280, 0.8, 1.35) * o.big * clamp(H / 720, 0.6, 1), w = 252 * sc, h = 336 * sc, x = 14, y = H - o.bm - h, f = 13.5 * sc;
+    c.fillStyle = '#F7F6F3'; rr(c, x, y, w, h, 12); c.fill(); c.strokeStyle = '#CFCBC0'; c.lineWidth = 0.9; c.stroke();
+    c.fillStyle = '#1E2230'; c.font = `700 ${f}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'top';
+    c.fillText('放大看月亮（從北方上空看）', x + 12 * sc, y + 10 * sc);
+    const R = 44 * sc, cx = x + w * 0.46, cy = y + 114 * sc, phi = Math.atan2(Math.sin(o.th), -Math.cos(o.th));
+    c.strokeStyle = '#C98A22'; c.fillStyle = '#C98A22'; c.lineWidth = 1.8 * sc;
+    [-0.72, 0.72].forEach(t => {
+      const yy = cy + t * R, x1 = cx + R + 70 * sc, x0 = cx + R + 10 * sc;
+      c.beginPath(); c.moveTo(x1, yy); c.lineTo(x0, yy); c.stroke();
+      c.beginPath(); c.moveTo(x0 - 5 * sc, yy); c.lineTo(x0 + 4 * sc, yy - 4.5 * sc); c.lineTo(x0 + 4 * sc, yy + 4.5 * sc); c.closePath(); c.fill();
+    });
+    c.fillStyle = '#7A4E08'; c.font = `700 ${f * 0.95}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'bottom';
+    c.fillText('太陽光', cx + R + 40 * sc, cy - R * 0.72 - 7 * sc);
+    c.save(); c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.clip();
+    c.fillStyle = '#2A3260'; c.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+    c.fillStyle = '#8F8D7C'; c.fillRect(cx, cy - R, R, 2 * R);
+    c.save(); c.beginPath(); c.rect(cx, cy - R, R, 2 * R); c.clip();
+    c.translate(cx, cy); c.rotate(phi); c.beginPath(); c.rect(0, -3 * R, 3 * R, 6 * R); c.clip();
+    c.fillStyle = '#F6F1DE'; c.fillRect(-3 * R, -3 * R, 6 * R, 6 * R);
+    c.restore(); c.restore();
+    c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.lineWidth = 1; c.strokeStyle = 'rgba(80,80,100,.5)'; c.stroke();
+    c.beginPath(); c.arc(cx, cy, R + 5 * sc, phi - Math.PI / 2, phi + Math.PI / 2); c.lineWidth = 4 * sc; c.lineCap = 'round'; c.strokeStyle = '#3F4A8A'; c.stroke(); c.lineCap = 'butt';
+    const ex = Math.cos(phi), ey = Math.sin(phi), e0 = R + 12 * sc, e1 = R + 30 * sc;
+    c.beginPath(); c.moveTo(cx + ex * e0, cy + ey * e0); c.lineTo(cx + ex * e1, cy + ey * e1); c.strokeStyle = '#F7F6F3'; c.lineWidth = 5 * sc; c.stroke();
+    c.strokeStyle = '#3F4A8A'; c.fillStyle = '#3F4A8A'; c.lineWidth = 2 * sc; c.stroke();
+    c.beginPath(); c.moveTo(cx + ex * (e1 + 6 * sc), cy + ey * (e1 + 6 * sc));
+    c.lineTo(cx + ex * (e1 - 3 * sc) - ey * 4.5 * sc, cy + ey * (e1 - 3 * sc) + ex * 4.5 * sc);
+    c.lineTo(cx + ex * (e1 - 3 * sc) + ey * 4.5 * sc, cy + ey * (e1 - 3 * sc) - ex * 4.5 * sc); c.closePath(); c.fill();
+    label(c, '往地球', cx + ex * (e1 + 20 * sc), cy + ey * (e1 + 20 * sc), f * 0.95, false, 'center', 'middle');
+    c.fillStyle = '#1E2230'; c.font = `400 ${f}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'top';
+    c.fillText('月亮永遠一半亮、一半暗', x + 12 * sc, y + 238 * sc);
+    c.fillText(`從地球看：${o.phase}（亮面 ${Math.round(o.k * 100)}%）`, x + 12 * sc, y + 258 * sc);
+    drawMoon(c, x + 34 * sc, y + 302 * sc, 20 * sc, o.k, o.brg, 0);
+    c.fillStyle = '#1E2230'; c.textBaseline = 'middle'; c.fillText('＝ 你抬頭看到的月亮', x + 62 * sc, y + 302 * sc);
+  }
+
+  function renderSpace(cv, isMain) {
+    const Q = prep(cv); if (!Q) return; const { c, W, H } = Q;
+    const loc = LOCS[state.loc], ms = state.ms;
+    const sun = A.sunPos(ms, loc.lat, loc.lon), moon = A.moonPos(ms, loc.lat, loc.lon);
+    const bigK = document.documentElement.classList.contains('big') ? 1.25 : 1;
+    const fs = clamp(W * 0.0175 * (isMain ? 1 : 1.3), 9, 24) * (isMain ? bigK : 1);
+
+    // 場景基底：X=太陽方向、Z=黃極、Y=Z×X
+    const Zs = A.eclipticPole(ms), s0 = eqVec(sun.ra, sun.dec);
+    const Xs = norm(add(s0, Zs, -dot(s0, Zs))), Ys = cross(Zs, Xs);
+    const toScene = v => [dot(v, Xs), dot(v, Ys), dot(v, Zs)];
+
+    const k = isMain ? Math.min(H / 6.9, W / 8.0) : Math.min(H / 6.4, W / 7.0), cx = W / 2, cy = H / 2, F = 16;
+    const proj = p => { const q = camXform(p), f = F / (F - q[2]); return { x: cx + q[0] * k * f, y: cy - q[1] * k * f, z: q[2], f }; };
+
+    // 背景
+    c.fillStyle = COL.space; c.fillRect(0, 0, W, H);
+    c.fillStyle = 'rgba(255,255,240,.55)';
+    for (const st of BGSTARS) { c.globalAlpha = 0.25 + 0.6 * st.b; c.fillRect(((st.ra / TAU) * W) | 0, (((st.dec / Math.PI) + 0.5) * H) | 0, 1.4, 1.4); }
+    c.globalAlpha = 1;
+
+    // 物件位置
+    const gmst = A.gmstRad(ms), phi = loc.lat * RAD, th = gmst + loc.lon * RAD;
+    const footEq = [Math.cos(phi) * Math.cos(th), Math.cos(phi) * Math.sin(th), Math.sin(phi)];
+    const eastEq = [-Math.sin(th), Math.cos(th), 0];
+    const northEq = [-Math.sin(phi) * Math.cos(th), -Math.sin(phi) * Math.sin(th), Math.cos(phi)];
+    const foot = toScene(footEq), east = toScene(eastEq), north = toScene(northEq);
+    const axis = toScene([0, 0, 1]);
+    const uSun = [1, 0, 0], uMoon = toScene(eqVec(moon.ra, moon.dec));
+    const D_MOON = 3.0, moonPos = uMoon.map(v => v * D_MOON);
+    const sc = camXform(uSun);                     // 相機座標中的太陽方向
+    const P0 = proj([0, 0, 0]);
+    const placed = [], labelQ = [];
+    const labelAt = (...args) => labelQ.push(args);
+    const drawLabelAt = (text, x, y, f, align = 'center', base = 'bottom') => {
+      c.font = `700 ${f}px ${FONT}`;
+      const w = c.measureText(text).width, hg = f * 1.15;
+      const rect = dy => ({ x: align === 'center' ? x - w / 2 : align === 'left' ? x : x - w, y: base === 'bottom' ? y + dy - hg : base === 'top' ? y + dy : y + dy - hg / 2, w, h: hg });
+      const hit = r => placed.some(q => r.x < q.x + q.w && r.x + r.w > q.x && r.y < q.y + q.h && r.y + r.h > q.y);
+      let dy = 0;
+      for (const t of [0, -1.2, 1.2, -2.4, 2.4, -3.6, 3.6]) { dy = t * f; if (!hit(rect(dy))) break; }
+      placed.push(rect(dy)); label(c, text, x, y + dy, f, true, align, base);
+    };
+
+    const before = [], after = [];
+    const put = (z, fn) => (z < 0 ? before : after).push(fn);
+
+    /* 月球軌道（黃道面圓環，距離縮短） */
+    const ring = [];
+    for (let i = 0; i <= 120; i++) { const t = (i / 120) * TAU; ring.push(proj([D_MOON * Math.cos(t), D_MOON * Math.sin(t), 0])); }
+    const strokeRing = front => {
+      c.beginPath(); let pen = false;
+      for (const p of ring) { if ((p.z >= 0) === front) { if (!pen) { c.moveTo(p.x, p.y); pen = true; } else c.lineTo(p.x, p.y); } else pen = false; }
+      c.setLineDash([4, 5]); c.lineWidth = 1.2; c.strokeStyle = 'rgba(190,200,235,.55)'; c.stroke(); c.setLineDash([]);
+    };
+    before.push(() => strokeRing(false)); after.push(() => strokeRing(true));
+    // 公轉方向箭頭
+    const ma = Math.atan2(moonPos[1], moonPos[0]) + 0.5;
+    const arrowAt = (center, ang, r, col) => {
+      const p1 = proj([r * Math.cos(ang), r * Math.sin(ang), 0]), p0 = proj([r * Math.cos(ang - 0.08), r * Math.sin(ang - 0.08), 0]);
+      const dx = p1.x - p0.x, dy = p1.y - p0.y, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, sz = Math.max(5, k * 0.11);
+      c.fillStyle = col; c.beginPath(); c.moveTo(p1.x + ux * sz, p1.y + uy * sz); c.lineTo(p1.x - ux * sz * 0.4 - uy * sz * 0.7, p1.y - uy * sz * 0.4 + ux * sz * 0.7);
+      c.lineTo(p1.x - ux * sz * 0.4 + uy * sz * 0.7, p1.y - uy * sz * 0.4 - ux * sz * 0.7); c.closePath(); c.fill();
+    };
+    { const pa = proj([D_MOON * Math.cos(ma), D_MOON * Math.sin(ma), 0]); put(pa.z, () => arrowAt(null, ma, D_MOON, 'rgba(190,200,235,.85)')); }
+
+    /* 太陽光線（平行，從右側射來；地球與月亮都有） */
+    const sunArrow = (a, b) => {
+      put((a.z + b.z) / 2, () => {
+        c.strokeStyle = 'rgba(226,163,59,.6)'; c.lineWidth = isMain ? 1.8 : 1.3; c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+        const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, sz = Math.max(5, k * 0.1);
+        c.fillStyle = 'rgba(226,163,59,.9)'; c.beginPath(); c.moveTo(b.x + ux * sz, b.y + uy * sz);
+        c.lineTo(b.x - uy * sz * 0.55, b.y + ux * sz * 0.55); c.lineTo(b.x + uy * sz * 0.55, b.y - ux * sz * 0.55); c.closePath(); c.fill();
+      });
+    };
+    let xs = 5.2; while (xs > 2.4 && proj([xs, 0, 0]).x > W - 14) xs -= 0.2;
+    [-1.5, -0.75, 0, 0.75, 1.5].forEach(o => sunArrow(proj([xs, o, 0]), proj([1.55, o, 0])));
+    [-0.17, 0, 0.17].forEach(o => sunArrow(proj([moonPos[0] + 1.55, moonPos[1] + o, moonPos[2]]), proj([moonPos[0] + 0.5, moonPos[1] + o, moonPos[2]])));
+
+    if (isMain) { const pl = proj([Math.min(4.4, xs - 0.6), 1.5, 0]); put(pl.z, () => labelAt('太陽光（平行射來）', Math.min(pl.x, W - 8), pl.y - 6, fs * 0.85, pl.x > W * 0.8 ? 'right' : 'center', 'bottom')); }
+
+    /* 地軸（球外兩段） */
+    const axSeg = (sgn) => {
+      const a = proj(axis.map(v => v * 1.02 * sgn)), b = proj(axis.map(v => v * 1.42 * sgn));
+      put(sgn > 0 ? b.z : b.z, () => {
+        c.lineCap = 'round'; c.strokeStyle = '#FFD66B'; c.lineWidth = 2; c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+        if (sgn > 0) { c.fillStyle = '#fff'; c.beginPath(); c.arc(b.x, b.y, 3, 0, TAU); c.fill(); }
+        if (sgn > 0) labelAt('北極', b.x - 6, b.y, fs * 0.9, 'right', 'middle');
+      });
+    };
+    axSeg(1); axSeg(-1);
+
+    /* 月亮 */
+    {
+      const pm = proj(moonPos), Rm = Math.max(0.2727 * k * pm.f, 6);
+      put(pm.z, () => {
+        const kk = (1 + sc[2]) / 2, brg = Math.atan2(sc[0], sc[1]) * DEG;
+        const gl = c.createRadialGradient(pm.x, pm.y, Rm, pm.x, pm.y, Rm * 3.2);
+        gl.addColorStop(0, 'rgba(235,235,255,.22)'); gl.addColorStop(1, 'rgba(235,235,255,0)'); c.fillStyle = gl; c.fillRect(pm.x - Rm * 3.3, pm.y - Rm * 3.3, Rm * 6.6, Rm * 6.6);
+        drawMoon(c, pm.x, pm.y, Rm, kk, brg, 0);
+        if (isMain) labelAt('月亮', pm.x + Rm + 5, pm.y, fs, 'left', 'middle');
+      });
+    }
+
+    /* 人、地平面、視線 */
+    {
+      const ps = Math.max(1, 15 / (0.34 * k)), pf = proj(foot), dayHere = dot(foot, uSun) > 0;
+      const head = add(foot, foot, 0.36 * ps), bodyTop = add(foot, foot, 0.30 * ps);
+      put(pf.z, () => {
+        // 地平面（切過腳下的透明圓盤）
+        const r = 0.7 * ps; c.beginPath();
+        for (let i = 0; i <= 48; i++) { const t = (i / 48) * TAU, p = proj(add(add(foot, east, r * Math.cos(t)), north, r * Math.sin(t))); i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y); }
+        c.closePath(); c.fillStyle = dayHere ? 'rgba(255,205,100,.32)' : 'rgba(110,130,255,.26)'; c.fill();
+        c.setLineDash([4, 4]); c.lineWidth = 1.2; c.strokeStyle = 'rgba(255,255,255,.7)'; c.stroke(); c.setLineDash([]);
+        // 面向箭頭（躺在地平面上，指向「人的視角」畫面中央的方向）
+        {
+          const fr = state.face * RAD, fd = [north[0] * Math.cos(fr) + east[0] * Math.sin(fr), north[1] * Math.cos(fr) + east[1] * Math.sin(fr), north[2] * Math.cos(fr) + east[2] * Math.sin(fr)];
+          const a = proj(add(foot, fd, 0.1 * ps)), e = proj(add(foot, fd, 0.88 * ps)), dx = e.x - a.x, dy = e.y - a.y, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, sz = Math.max(5, k * 0.09);
+          c.lineWidth = 3; c.strokeStyle = '#2DB38A'; c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(e.x, e.y); c.stroke();
+          c.fillStyle = '#2DB38A'; c.beginPath(); c.moveTo(e.x + ux * sz, e.y + uy * sz); c.lineTo(e.x - uy * sz * 0.6, e.y + ux * sz * 0.6); c.lineTo(e.x + uy * sz * 0.6, e.y - ux * sz * 0.6); c.closePath(); c.fill();
+          if (isMain) labelAt('面向', e.x + ux * sz * 1.6, e.y + uy * sz * 1.6, fs * 0.85, 'center', 'middle');
+        }
+        // 視線（方向，不是距離）
+        if (state.sight) {
+          const ph = proj(head);
+          const ray = (u, col, name, up) => {
+            const e = proj(add(head, u, 1.15)); c.lineWidth = 1.7; c.strokeStyle = rgba(col, up ? 0.95 : 0.4); c.setLineDash(up ? [] : [3, 4]);
+            c.beginPath(); c.moveTo(ph.x, ph.y); c.lineTo(e.x, e.y); c.stroke(); c.setLineDash([]);
+            const dx = e.x - ph.x, dy = e.y - ph.y, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, sz = Math.max(5, k * 0.1);
+            c.fillStyle = rgba(col, up ? 0.95 : 0.4); c.beginPath(); c.moveTo(e.x + ux * sz, e.y + uy * sz);
+            c.lineTo(e.x - uy * sz * 0.55, e.y + ux * sz * 0.55); c.lineTo(e.x + uy * sz * 0.55, e.y - ux * sz * 0.55); c.closePath(); c.fill();
+            if (isMain) labelAt(name, e.x + ux * sz * 1.5, e.y + uy * sz * 1.5, fs * 0.85, 'center', 'middle');
+          };
+          ray(uMoon, COL.moon, '往月亮', dot(uMoon, foot) > 0);
+          ray(uSun, COL.sun, '往太陽', dot(uSun, foot) > 0);
+        }
+        // 小人
+        const pb = proj(bodyTop), ph2 = proj(head);
+        c.lineCap = 'round'; c.strokeStyle = COL.person; c.lineWidth = Math.max(3, 0.11 * ps * k * pf.f);
+        c.beginPath(); c.moveTo(pf.x, pf.y); c.lineTo(pb.x, pb.y); c.stroke();
+        c.fillStyle = COL.person; c.beginPath(); c.arc(ph2.x, ph2.y, Math.max(2.6, 0.075 * ps * k * ph2.f), 0, TAU); c.fill();
+        if (isMain) labelAt(`你（${loc.name}）· ${dayHere ? '白天' : '夜晚'}`, pf.x, pf.y + 8, fs * 0.95, 'center', 'top');
+      });
+    }
+
+    /* 地球本體（日夜、經緯線） */
+    const Re = k * P0.f;
+    const earth = () => {
+      c.save(); c.translate(P0.x, P0.y);
+      c.beginPath(); c.arc(0, 0, Re, 0, TAU); c.fillStyle = COL.earthNight; c.fill();
+      c.save(); c.rotate((Math.atan2(sc[0], sc[1]) * DEG - 90) * RAD);
+      litShape(c, Re, (1 + sc[2]) / 2); c.fillStyle = COL.earthDay; c.fill(); c.restore();
+      c.restore();
+      // 經緯線（只畫朝向觀看者的一面）
+      const ePt = (lat, lon) => { const f = lat * RAD, t = gmst + lon * RAD; return proj(toScene([Math.cos(f) * Math.cos(t), Math.cos(f) * Math.sin(t), Math.sin(f)])); };
+      const line = (pts, color, w, dash) => {
+        c.beginPath(); let pen = false;
+        for (const p of pts) { if (p.z > 0) { if (!pen) { c.moveTo(p.x, p.y); pen = true; } else c.lineTo(p.x, p.y); } else pen = false; }
+        c.setLineDash(dash || []); c.strokeStyle = color; c.lineWidth = w; c.stroke(); c.setLineDash([]);
+      };
+      for (const lat of [-60, -30, 30, 60]) { const pts = []; for (let lo = 0; lo <= 360; lo += 6) pts.push(ePt(lat, lo)); line(pts, 'rgba(255,255,255,.28)', 1); }
+      for (let lo = 0; lo < 360; lo += 30) { const pts = []; for (let la = -90; la <= 90; la += 6) pts.push(ePt(la, lo)); line(pts, 'rgba(255,255,255,.28)', 1); }
+      { const pts = []; for (let lo = 0; lo <= 360; lo += 4) pts.push(ePt(0, lo)); line(pts, 'rgba(255,255,255,.9)', 1.8); }
+      { const pts = []; for (let lo = 0; lo <= 360; lo += 4) pts.push(ePt(23.44, lo)); line(pts, 'rgba(240,178,74,.95)', 1.5, [5, 4]); }
+      c.beginPath(); c.arc(P0.x, P0.y, Re, 0, TAU); c.lineWidth = 1; c.strokeStyle = 'rgba(255,255,255,.35)'; c.stroke();
+    };
+
+    // 太陽（遠在右側）。依深度決定前後：在地球後面先畫（被地球擋住）；在前面才畫在地球上面，重疊時變半透明，才看得到地球
+    const ps = proj([8.6, 0, 0]), Rsun = 1.05 * k;
+    const sunDisc = alpha => {
+      if (!(ps.x - Rsun < W + Rsun && ps.x + Rsun > -Rsun && ps.y > -Rsun && ps.y < H + Rsun && ps.x < W + Rsun * 0.2)) return;
+      c.save(); c.globalAlpha = alpha;
+      const gl = c.createRadialGradient(ps.x, ps.y, Rsun * 0.7, ps.x, ps.y, Rsun * 3);
+      gl.addColorStop(0, 'rgba(255,200,70,.45)'); gl.addColorStop(1, 'rgba(255,200,70,0)'); c.fillStyle = gl; c.fillRect(ps.x - Rsun * 3, ps.y - Rsun * 3, Rsun * 6, Rsun * 6);
+      c.beginPath(); c.arc(ps.x, ps.y, Rsun, 0, TAU); c.fillStyle = '#FFC93C'; c.fill();
+      c.restore();
+    };
+    const sunFront = ps.z > 0;
+    if (!sunFront) sunDisc(1);
+    before.forEach(f => f()); earth(); after.forEach(f => f());
+    labelQ.forEach(a => drawLabelAt(...a));
+    if (sunFront) {
+      const d = Math.hypot(ps.x - P0.x, ps.y - P0.y), t = clamp((d - Re * 0.3) / (Re + Rsun - Re * 0.3), 0, 1);
+      sunDisc(0.3 + 0.7 * t);
+    }
+
+    /* 太陽（遠在右側；在畫面外就改用提示） */
+    {
+      const onScreen = ps.x < W - 4 && ps.x > 4;
+      if (!onScreen) {
+        const left = ps.x < W / 2, txt = left ? '‹ 太陽' : '太陽 ›';
+        c.font = `700 ${fs}px ${FONT}`; const w = c.measureText(txt).width + fs * 1.4, h = fs * 2.1, x = left ? 8 : W - 8 - w;
+        const cr = cvMain.getBoundingClientRect(), pr = cvPip.getBoundingClientRect(), ir = $('#hudInfo').getBoundingClientRect();
+        let top = fs * 3.2;
+        if (left) top = Math.max(top, ir.bottom - cr.top + h); else if (state.pip && !isMain === false && pr.height) top = Math.max(top, pr.bottom - cr.top + h);
+        const y = Math.min(Math.max(ps.y, top), H - 130);
+        c.fillStyle = 'rgba(247,246,243,.94)'; rr(c, x, y - h / 2, w, h, h / 2); c.fill(); c.lineWidth = 1; c.strokeStyle = COL.sun; c.stroke();
+        c.fillStyle = '#1E2230'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, x + w / 2, y + 1);
+      }
+    }
+    if (isMain && W >= 700 && state.mode === 'sky') drawMoonCard(c, W, H, { th: Math.atan2(uMoon[1], uMoon[0]), k: moon.k, brg: A.bearing(moon.alt, moon.az, sun.alt, sun.az),
+      phase: A.phaseName(moon.D), bm: W > 1100 ? 16 : 96, big: bigK > 1 ? 1.15 : 1 });
+    if (!isMain) pipTag(c, '太空視角 ⇄', 11);
+  }
+
+  /* ---------- 繪製調度：主畫面 + 小視窗 ---------- */
+  // 小視窗左上角的三段式切換：[另外兩個視角] [⇄ 與主畫面互換]（四季、量測模式沒有可選的內容）
+  let pipSegs = null;
+  const pipOther = () => VIEW_IDS.find(v => v !== state.view && v !== pipView());
+  function pipChip() {
+    pipSegs = null;
+    if (state.mode === 'meas') return;
+    const pr = prep(cvPip); if (!pr) return;
+    const c = pr.c, fs = 11, h = fs * 2.1, y = 6, pad = fs * 0.8;
+    const items = ['g', 'p', 's'].filter(v => v !== state.view).map(v => ({ t: viewOf(v).sm, act: v, on: v === pipView() }));
+    items.push({ t: '⇄', act: 'swap', on: false });
+    c.font = `700 ${fs}px ${FONT}`;
+    let x = 6; items.forEach(it => { it.w = c.measureText(it.t).width + pad * 2; it.x = x; x += it.w; });
+    const total = x - 6;
+    c.fillStyle = 'rgba(247,246,243,.95)'; rr(c, 6, y, total, h, h / 2); c.fill();
+    c.save(); rr(c, 6, y, total, h, h / 2); c.clip();
+    items.forEach((it, i) => {
+      if (it.on) { c.fillStyle = '#DDE1FF'; c.fillRect(it.x, y, it.w, h); }
+      if (i) { c.fillStyle = 'rgba(30,34,48,.25)'; c.fillRect(it.x, y + 3, 0.9, h - 6); }
+      c.fillStyle = it.on ? '#2B3380' : '#1E2230'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(it.t, it.x + it.w / 2, y + h / 2 + 1);
+    });
+    c.restore();
+    c.lineWidth = 0.9; c.strokeStyle = 'rgba(30,34,48,.35)'; rr(c, 6, y, total, h, h / 2); c.stroke();
+    pipSegs = { y: y - 6, h: h + 12, items };
+  }
+  const pipHit = (x, y) => pipSegs && y >= pipSegs.y && y <= pipSegs.y + pipSegs.h ? pipSegs.items.find(it => x >= it.x - 1 && x <= it.x + it.w + 1) : null;
+
+  /* ---------- 繪製調度：主畫面 + 小視窗 ---------- */
+  function draw() {
+    const R = { p: renderPerson, g: renderGround, s: isOrbit() ? renderOrbit : renderSpace };
+    if (state.view !== 'p' && state.view !== 'g') chips = [];
+    R[state.view](cvMain, true);
+    const showPip = pipOn();
+    cvPip.classList.toggle('hidden', !showPip);
+    if (showPip) { R[pipView()](cvPip, false); pipChip(); } else pipSegs = null;
+    updateHud();
+  }
+
+  /* ---------- 讀數與 HUD ---------- */
+  const setText = (id, t) => { const e = document.getElementById(id); if (e.dataset.v !== t) { e.dataset.v = t; e.innerHTML = t; } };
+  const badge = (up, upTxt, downTxt) => up ? `<span class="badge up">${upTxt}</span>` : `<span class="badge down">${downTxt}</span>`;
+  const fAz = az => `${Math.round(A.n360(az)) % 360}°　${dirName(az)}`;
+  const WK = ['日', '一', '二', '三', '四', '五', '六'];
+  let hintKey = '', hintTimer = null;
+  function showHint(t) {
+    const h = $('#dragHint'); h.textContent = t; h.classList.add('show');
+    clearTimeout(hintTimer); hintTimer = setTimeout(() => h.classList.remove('show'), 4500);
+  }
+  function updateHud() {
+    const lp = A.localParts(state.ms), wd = WK[new Date(state.ms + A.TZ_MS).getUTCDay()];
+    let t;
+    if (state.view === 'p') t = '左右拖曳可以轉動面向';
+    else if (state.view === 'g') t = '左右拖曳可以繞著他轉（傾斜角固定）';
+    else if (isOrbit()) t = '地球繞太陽（示意圖，不是真實比例）';
+    else t = state.cam === 'tb' ? '課本視角：從北方上空俯視，拖曳可以旋轉' : '拖曳可以旋轉';
+    const hk = state.view + (state.view === 's' ? (isOrbit() ? 'o' : state.cam) : '');
+    if (hk !== hintKey) { hintKey = hk; showHint(t); }
+    $('#hudTime').textContent = `${lp.m}月${lp.d}日（${wd}）${A.fmtHM(lp.min)}`;
+    $('#note1').hidden = state.view !== 'p'; $('#note2').hidden = state.view !== 's'; $('#note3').hidden = state.view !== 'g';
+    $('#facingRow').style.display = state.view === 'p' || state.view === 'g' ? '' : 'none';
+    $('#gcamRow').style.display = state.view === 'g' ? '' : 'none';
+    $('#camRow').style.display = state.view === 's' ? '' : 'none';
+    document.body.classList.toggle('sv', state.view === 's');
+    document.body.classList.toggle('orb', state.view === 's' && isOrbit());
+    renderTask(); renderLab(); renderSeason();
+  }
+  function updateReadouts() {
+    const loc = LOCS[state.loc], ms = state.ms, day = ensureDay();
+    const sun = A.sunPos(ms, loc.lat, loc.lon), moon = A.moonPos(ms, loc.lat, loc.lon);
+    const lu = A.lunar(ms);
+    const fm = t => t === null ? '今天沒有' : A.fmtClock(t), rs = day.sunRS, mr = day.moonRS;
+    setText('sunRise', rs.rise === null ? '—' : `${A.fmtClock(rs.rise)}　<span style="font-weight:400">方位 ${Math.round(rs.riseAz)}°</span>`);
+    setText('sunSet', rs.set === null ? '—' : `${A.fmtClock(rs.set)}　<span style="font-weight:400">方位 ${Math.round(rs.setAz)}°</span>`);
+    if (rs.rise !== null && rs.set !== null) { const m = Math.round((rs.set - rs.rise) / 60000); setText('dayLen', `${Math.floor(m / 60)} 小時 ${m % 60} 分`); } else setText('dayLen', '—');
+    setText('moonRise', fm(mr.rise)); setText('moonSet', fm(mr.set));
+    const side = alt => alt > 0 ? '' : '（在地平線下）';
+    setText('infoSun', `${fAz(sun.az)} · 高 ${sun.alt.toFixed(1)}°${side(sun.alt)}`);
+    setText('infoMoon', `${fAz(moon.az)} · 高 ${moon.alt.toFixed(1)}°${side(moon.alt)}`);
+    setText('infoPhase', `${A.phaseName(moon.D)} · 亮面 ${Math.round(moon.k * 100)}%` + (lu ? ` · ${lu.label}` : ''));
+    setText('sumDay', rs.rise !== null && rs.set !== null ? `${A.fmtClock(rs.rise)} / ${A.fmtClock(rs.set)}` : '—');
+  }
+  function updateControls() {
+    const lp = A.localParts(state.ms);
+    const di = $('#date'); if (di.value !== lp.date) di.value = lp.date;
+    $('#timeLabel').textContent = A.fmtHM(lp.min);
+    const sl = $('#slider'); if (+sl.value !== lp.min) sl.value = lp.min;
+    $('#play').textContent = state.playing ? '❚❚ 暫停' : (state.mode === 'season' ? '▶ 播放一年' : state.mode === 'moon' ? '▶ 播放一個月' : '▶ 播放');
+    document.querySelectorAll('#speed button').forEach(b => b.classList.toggle('on', +b.dataset.s === state.speed));
+    document.querySelectorAll('#facingRow [data-face]').forEach(b => b.classList.toggle('on', Math.abs(A.wrap180(state.face - +b.dataset.face)) < 20));
+    document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === state.view));
+    document.querySelectorAll('#gcamRow [data-rel]').forEach(b => b.classList.toggle('on', Math.abs(A.wrap180(state.gb - state.face - +b.dataset.rel)) < 20));
+    document.querySelectorAll('#camSeg button').forEach(b => b.classList.toggle('on', b.dataset.cam === state.cam));
+    document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.m === (state.mode === 'meas' ? 'sky' : state.mode)));
+    $('#taskSwRow').hidden = state.mode !== 'sky' && state.mode !== 'meas';
+    $('#taskSw').checked = state.mode === 'meas';
+    const dps = DAYS_PER_SEC[state.mode] && DAYS_PER_SEC[state.mode][state.speed];
+    $('#speedHint').textContent = dps ? (state.mode === 'moon' ? `一個月約 ${Math.round(29.5 / dps)} 秒` : `一年約 ${Math.round(365 / dps)} 秒`) : '';
+    $('#slider2').value = lp.min; $('#timeLabel2').textContent = A.fmtHM(lp.min);
+    $('#tPip').classList.toggle('on', state.pip); $('#tSight').classList.toggle('on', state.sight);
+    $('#sumView').textContent = state.view === 'p' ? '人的視角' : state.view === 'g' ? '地面視角' : isOrbit() ? '太空 · 繞太陽' : (state.cam === 'tb' ? '太空 · 課本視角' : '太空 · 立體');
+    $('#sumShow').textContent = [state.grid && '格線', state.trail && '軌跡', state.sight && '視線'].filter(Boolean).join('、') || '全部關閉';
+    $('#tGrid').classList.toggle('on', state.grid); $('#tTrail').classList.toggle('on', state.trail); 
+  }
+  function refresh() { updateControls(); updateReadouts(); dirty = true; saveHash(); }
+
+  /* ---------- 操作 ---------- */
+  let tween = null, camTween = null, gbTween = null;
+  const gbTurn = az => { gbTween = { from: state.gb, d: A.wrap180(az - state.gb), t0: performance.now(), dur: 500 }; };
+  function turnTo(az) { tween = { from: state.face, d: A.wrap180(az - state.face), t0: performance.now(), dur: 450 }; }
+  function setCam(name) {
+    state.cam = name; state.camBefore = null;
+    camTween = name === 'o' ? null : { from: { ...spaceCam }, to: CAM_PRESET[name], t0: performance.now(), dur: 800 };
+    refresh();
+  }
+
+  const sel = $('#loc'); Object.entries(LOCS).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.name; sel.appendChild(o); });
+  sel.addEventListener('change', () => { state.loc = sel.value; refresh(); });
+  $('#date').addEventListener('change', e => { if (!e.target.value) return; state.ms = A.msFromLocal(e.target.value, A.localParts(state.ms).min); refresh(); });
+  $('#dPrev').addEventListener('click', () => { state.ms -= 86400000; refresh(); });
+  $('#dNext').addEventListener('click', () => { state.ms += 86400000; refresh(); });
+  $('#slider').addEventListener('input', e => { state.ms = A.msFromLocal(A.localParts(state.ms).date, +e.target.value); refresh(); });
+  $('#play').addEventListener('click', () => { state.playing = !state.playing; refresh(); });
+  $('#now').addEventListener('click', () => { state.ms = Math.floor(Date.now() / 60000) * 60000; refresh(); });
+  document.querySelectorAll('#speed button').forEach(b => b.addEventListener('click', () => { state.speed = +b.dataset.s; refresh(); }));
+  document.querySelectorAll('#facingRow [data-face]').forEach(b => b.addEventListener('click', () => { turnTo(+b.dataset.face); }));
+  document.querySelectorAll('#viewSeg button').forEach(b => b.addEventListener('click', () => pickView(b.dataset.v)));
+  document.querySelectorAll('#gcamRow [data-rel]').forEach(b => b.addEventListener('click', () => gbTurn(state.face + +b.dataset.rel)));
+  document.querySelectorAll('#camSeg button').forEach(b => b.addEventListener('click', () => setCam(b.dataset.cam)));
+  // 日期時間視窗
+  const dtPop = $('#dtPop'), dtBtn = $('#hudTime');
+  const dtOpen = o => { dtPop.hidden = !o; dtBtn.setAttribute('aria-expanded', o ? 'true' : 'false'); };
+  dtBtn.addEventListener('click', () => dtOpen(dtPop.hidden));
+  $('#dtClose').addEventListener('click', () => { dtOpen(false); dtBtn.focus(); });
+  document.addEventListener('pointerdown', e => { if (!dtPop.hidden && !dtPop.contains(e.target) && !dtBtn.contains(e.target)) dtOpen(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !dtPop.hidden) { dtOpen(false); dtBtn.focus(); } });
+  const addMonths = n => {
+    const [y, m, d] = A.localParts(state.ms).date.split('-').map(Number), t = new Date(Date.UTC(y, m - 1 + n, 1));
+    const ny = t.getUTCFullYear(), nm = t.getUTCMonth(), dim = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+    state.ms = A.msFromLocal(`${ny}-${String(nm + 1).padStart(2, '0')}-${String(Math.min(d, dim)).padStart(2, '0')}`, A.localParts(state.ms).min); refresh();
+  };
+  $('#mPrev').addEventListener('click', () => addMonths(-1));
+  $('#mNext').addEventListener('click', () => addMonths(1));
+  $('#slider2').addEventListener('input', e => { state.ms = A.msFromLocal(A.localParts(state.ms).date, +e.target.value); refresh(); });
+  $('#tPip').addEventListener('click', () => { state.pip = !state.pip; refresh(); });
+  $('#tSight').addEventListener('click', () => { state.sight = !state.sight; refresh(); });
+  $('#tGrid').addEventListener('click', () => { state.grid = !state.grid; refresh(); });
+  $('#tTrail').addEventListener('click', () => { state.trail = !state.trail; refresh(); });
+  $('#big').addEventListener('change', e => { document.documentElement.classList.toggle('big', e.target.checked); dirty = true; });
+
+
+  /* ---------- 量測模式：任務卡 ---------- */
+  const TASKS = [
+    { title: '任務 1　找太陽', text: '點一下天空，把瞄準器放到太陽上，再按「記下來」。要在 9:00、12:00、15:00 各量一次。' },
+    { title: '任務 2　太陽什麼時候最高', text: '拖動下方的時間滑桿，找出太陽最高的那一刻。最高的時候，太陽在哪個方向？' },
+    { title: '任務 3　月亮也量量看', text: '把瞄準器放到月亮上，再按「記下來」。看不到月亮的話，按「幫我找月亮」。' }
+  ];
+  const TIMES = [540, 720, 900];
+  const prog = [{ log: [], done: false }, { done: false }, { log: [], done: false }];
+  let taskMsg = '';
+  const tgt = which => { const l = LOCS[state.loc]; return which === 'moon' ? A.moonPos(state.ms, l.lat, l.lon) : A.sunPos(state.ms, l.lat, l.lon); };
+  function aimHint(t) {
+    const a = state.aim, daz = A.wrap180(a.az - t.az) * Math.cos(t.alt * RAD), dalt = a.alt - t.alt, d = Math.hypot(daz, dalt), p = [];
+    if (Math.abs(dalt) > 4) p.push(dalt > 0 ? '瞄準器太高了，往下移' : '瞄準器太低了，往上移');
+    if (Math.abs(daz) > 4) p.push(daz > 0 ? '太靠右了，往左移' : '太靠左了，往右移');
+    return { ok: d <= 6, text: p.join('；') };
+  }
+  function culmination() {
+    const day = ensureDay(); let best = day.sunTrail[0];
+    for (const q of day.sunTrail) if (q.alt > best.alt) best = q;
+    const card = Math.round(best.az / 90) % 4 * 90;
+    return { az: best.az, alt: best.alt, ms: best.ms, dir: dirName(card), card };
+  }
+  const clockMs = min => A.msFromLocal(A.localParts(state.ms).date, min);
+  function recordAim() {
+    const T = state.task, lp = A.localParts(state.ms);
+    if (!state.aim) { taskMsg = '先點一下天空，放上瞄準器。'; return renderTask(); }
+    if (T === 0 && !TIMES.includes(lp.min)) { taskMsg = '請先按上面的時間：9:00、12:00 或 15:00。'; return renderTask(); }
+    const t = tgt(T === 2 ? 'moon' : 'sun');
+    if (t.alt <= 0) { taskMsg = T === 2 ? '月亮還在地平線下面，看不到。按「幫我找月亮」。' : '太陽還在地平線下面，看不到。'; return renderTask(); }
+    const h = aimHint(t);
+    if (!h.ok) { taskMsg = '還沒對準：' + h.text + '。'; return renderTask(); }
+    const entry = { min: lp.min, az: Math.round(A.n360(state.aim.az)) % 360, alt: Math.round(state.aim.alt) };
+    if (T === 0) {
+      prog[0].log = prog[0].log.filter(q => q.min !== entry.min).concat(entry).sort((a, b) => a.min - b.min);
+      if (prog[0].log.length === 3) {
+        prog[0].done = true; const [m, n, o] = prog[0].log;
+        taskMsg = `完成！早上太陽在${dirName(m.az)}（高 ${m.alt}°），中午在${dirName(n.az)}（高 ${n.alt}°），下午在${dirName(o.az)}（高 ${o.alt}°）。你發現太陽的位置怎麼變了嗎？`;
+      } else taskMsg = '量得很準！再換一個時間量量看。';
+    } else {
+      prog[2].log = [entry]; prog[2].done = true;
+      taskMsg = `量到了！月亮在${dirName(entry.az)}（方位 ${entry.az}°），高度角 ${entry.alt}°。月亮和太陽一樣，位置會隨時間改變。`;
+    }
+    renderTask();
+  }
+  function answerDir(d) {
+    const c = culmination();
+    if (d === c.card) {
+      prog[1].done = true;
+      taskMsg = `答對了！太陽最高的時候在${c.dir}方，大約 ${A.fmtHM(A.localParts(c.ms).min)}，高度角約 ${Math.round(c.alt)}°。`;
+    } else taskMsg = '再找找看：把滑桿拖到太陽最高的那一刻，看看它在哪個方向。';
+    renderTask();
+  }
+  function showAnswer() {
+    const T = state.task;
+    if (T === 1) { const c = culmination(); taskMsg = `答案：太陽最高在 ${A.fmtHM(A.localParts(c.ms).min)} 前後，在${c.dir}方，高度角約 ${Math.round(c.alt)}°。`; return renderTask(); }
+    const t = tgt(T === 2 ? 'moon' : 'sun');
+    if (t.alt <= 0) taskMsg = (T === 2 ? '月亮' : '太陽') + '現在在地平線下面，看不到。';
+    else { revealed.ms = state.ms; taskMsg = `答案：方位 ${Math.round(t.az)}°（${dirName(t.az)}），高度角 ${t.alt.toFixed(0)}°。`; }
+    dirty = true; renderTask();
+  }
+  function findMoon() {
+    const l = LOCS[state.loc];
+    for (let i = 1; i <= 96; i++) {
+      const ms = state.ms + i * 1800000, m = A.moonPos(ms, l.lat, l.lon), su = A.sunPos(ms, l.lat, l.lon);
+      if (m.alt > 20 && su.alt < -6) { state.ms = ms; taskMsg = '找到了！月亮現在在天空中。'; return refresh(); }
+    }
+    taskMsg = '兩天內都找不到夜裡的月亮，換個日期試試。'; renderTask();
+  }
+  function setTask(i) { state.task = clamp(i, 0, 2); taskMsg = ''; revealed.ms = null; refresh(); }
+  function renderTask() {
+    if (state.mode !== 'meas') return;
+    const T = state.task, d = TASKS[T];
+    $('#taskTitle').textContent = d.title; $('#taskStep').textContent = `${T + 1} / 3` + (prog[T].done ? ' ✓' : '');
+    $('#taskText').textContent = d.text;
+    $('#taskTime').style.display = T === 0 ? '' : 'none';
+    $('#taskDir').style.display = T === 1 ? '' : 'none';
+    $('#taskMoon').style.display = T === 2 ? '' : 'none';
+    $('#taskRec').style.display = T === 1 ? 'none' : '';
+    $('#taskAns').style.display = '';
+    const a = state.aim;
+    $('#aimAz').textContent = a ? `${Math.round(A.n360(a.az)) % 360}°` : '—';
+    $('#aimAlt').textContent = a ? `${Math.round(a.alt)}°` : '—';
+    $('#aimRow').style.display = T === 1 ? 'none' : '';
+    const log = $('#taskLog'); log.innerHTML = '';
+    (prog[T].log || []).forEach(q => { const li = document.createElement('li'); li.textContent = `${A.fmtHM(q.min)}　方位 ${q.az}°（${dirName(q.az)}）　高度角 ${q.alt}°　✓`; log.appendChild(li); });
+    const m = $('#taskMsg'); m.textContent = taskMsg; m.className = 'tmsg' + (/^(完成|量到了|答對|量得很準|找到了)/.test(taskMsg) ? ' ok' : '');
+    $('#taskPrev').disabled = T === 0; $('#taskNext').disabled = T === 2;
+    document.querySelectorAll('#taskTime button').forEach(b => b.classList.toggle('on', A.localParts(state.ms).min === +b.dataset.min));
+  }
+  /* ---------- 月相與月出 ---------- */
+  const MOON_EMO = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'];
+  const emoOf = D => MOON_EMO[Math.round(A.n360(D) / 45) % 8];
+  const DAY_MS = 86400000, WK2 = ['日', '一', '二', '三', '四', '五', '六'];
+  let labStart = null, weekKey = '', weekRows = [], labShown = false;
+  function buildWeek() {
+    const l = LOCS[state.loc], cur = A.dayStartMs(state.ms);
+    if (labStart === null || cur < labStart || cur >= labStart + 7 * DAY_MS) { labStart = cur; labShown = false; }
+    const key = labStart + state.loc;
+    if (key === weekKey) return weekRows;
+    weekRows = [];
+    for (let i = 0; i < 7; i++) {
+      const s0 = labStart + i * DAY_MS, rs = A.riseSet('moon', s0, l.lat, l.lon), m = A.moonPos(s0 + 18 * 3600000, l.lat, l.lon);
+      weekRows.push({ s0, rs, D: m.D, lu: A.lunar(s0 + 12 * 3600000) });
+    }
+    weekKey = key; labShown = false; return weekRows;
+  }
+  const delays = rows => rows.map((r, i) => (i && r.rs.rise !== null && rows[i - 1].rs.rise !== null) ? Math.round((r.rs.rise - rows[i - 1].rs.rise) / 60000 - 1440) : null);
+  function renderLab() {
+    if (state.mode !== 'moon') return;
+    const rows = buildWeek(), dl = delays(rows), cur = A.dayStartMs(state.ms), moon = A.moonPos(state.ms, LOCS[state.loc].lat, LOCS[state.loc].lon), lu = A.lunar(state.ms);
+    setText('labNow', `現在：${emoOf(moon.D)} <b>${A.phaseName(moon.D)}</b>　${lu ? lu.label : ''}　亮面 ${Math.round(moon.k * 100)}%`);
+    const h = '<tr><th>日期</th><th>農曆</th><th>月相</th><th>月出</th><th>月沒</th><th>比前一天</th></tr>' + rows.map((r, i) => {
+      const lp = A.localParts(r.s0), fmt = t => t === null ? '—' : A.fmtClock(t);
+      return `<tr data-i="${i}" class="${r.s0 === cur ? 'cur' : ''}"><td>${lp.m}/${lp.d}（${WK2[new Date(r.s0 + A.TZ_MS).getUTCDay()]}）</td><td>${r.lu ? r.lu.label.replace(/^.*月/, '') : ''}</td><td class="em">${emoOf(r.D)}</td><td>${fmt(r.rs.rise)}</td><td>${fmt(r.rs.set)}</td><td class="dl">${dl[i] === null ? '' : '晚 ' + dl[i] + ' 分'}</td></tr>`;
+    }).join('');
+    setText('labTbl', h);
+    let msg = '';
+    if (labShown) {
+      const ok = dl.filter(x => x !== null), avg = ok.length ? Math.round(ok.reduce((a, b) => a + b, 0) / ok.length) : null;
+      msg = (avg === null ? '' : `這 7 天，月亮每天平均晚 ${avg} 分鐘出來（不同的日子會有點不一樣）。`) + '原因：月亮每天在星空中往東移約 12°，地球要多轉一點才能再對準它。大約來說：新月跟太陽一起出來，上弦月中午出來，滿月傍晚日落時出來，下弦月半夜出來。';
+    }
+    const m = $('#labMsg'); if (m.textContent !== msg) m.textContent = msg;
+  }
+  function jumpPhase(target) {
+    const l = LOCS[state.loc]; let prev = null;
+    for (let h = 6; h <= 32 * 24; h += 1) {
+      const ms = state.ms + h * 3600000, e = A.wrap180(A.moonPos(ms, l.lat, l.lon).D - target);
+      if (prev !== null && prev < 0 && e >= 0) { state.playing = false; state.ms = A.msFromLocal(A.localParts(ms).date, 18 * 60); labStart = null; break; }
+      prev = e;
+    }
+    refresh();
+  }
+  $('#labJump').querySelectorAll('button').forEach(b => b.addEventListener('click', () => jumpPhase(+b.dataset.ph)));
+  $('#labTbl').addEventListener('click', e => { const tr = e.target.closest('tr[data-i]'); if (!tr) return; state.playing = false; state.ms = A.msFromLocal(A.localParts(weekRows[+tr.dataset.i].s0).date, A.localParts(state.ms).min); refresh(); });
+  $('#labAns').addEventListener('click', () => { labShown = true; dirty = true; renderLab(); });
+  $('#lab .th').addEventListener('click', () => { const m = $('#lab').classList.toggle('min'); $('#lab .th').setAttribute('aria-expanded', m ? 'false' : 'true'); });
+  if (innerWidth < 620) { $('#lab').classList.add('min'); $('#lab .th').setAttribute('aria-expanded', 'false'); }
+
+  let wasMeas = false, measBefore = null;
+  function applyMode() {
+    const meas = state.mode === 'meas';
+    if (meas && !wasMeas) measBefore = { grid: state.grid, trail: state.trail };
+    else if (!meas && wasMeas && measBefore) { state.grid = measBefore.grid; state.trail = measBefore.trail; measBefore = null; }
+    wasMeas = meas;
+    document.body.classList.toggle('meas', meas);
+    document.body.classList.toggle('lab', state.mode === 'moon');
+    document.body.classList.toggle('season', state.mode === 'season');
+    if (state.mode === 'season' && state.trailBefore === undefined) { state.trailBefore = state.trail; state.trail = false; }
+    else if (state.mode !== 'season' && state.trailBefore !== undefined) { state.trail = state.trailBefore; state.trailBefore = undefined; }
+    renderSeason();
+    renderLab();
+    if (meas) { state.view = 'p'; state.grid = true; state.trail = false; if (state.pip) { state.pipBefore = true; state.pip = false; } }
+    else if (state.pipBefore) { state.pip = true; state.pipBefore = false; }
+    renderTask();
+  }
+  // 切換主題只換內容，不動主畫面和小視窗的配置；量測任務會暫時固定成人的視角，離開時恢復原本的配置
+  function setMode(m) {
+    const prev = state.mode;
+    if (m === 'meas' && prev !== 'meas') { state.viewBefore = state.view; state.pvBefore = state.pv; }
+    if (prev === 'meas' && m !== 'meas' && state.viewBefore) { state.view = state.viewBefore; state.pv = state.pvBefore || ''; state.viewBefore = null; }
+    if (prev === 'season' && m !== 'season' && state.cam === 'o') { state.camBefore = 'o'; state.cam = 'tb'; Object.assign(spaceCam, CAM_PRESET.tb); camTween = null; }
+    if (m === 'season' && prev !== 'season' && state.camBefore === 'o' && state.cam === 'tb') { state.cam = 'o'; state.camBefore = null; }
+    state.mode = m; taskMsg = ''; applyMode(); refresh();
+  }
+  // 面板的「量測任務」開關：量測是日月主題裡的一個活動，不是獨立主題（內部仍用 mode='meas'，舊的 QR/網址照常有效）
+  $('#taskSw').addEventListener('change', e => {
+    setMode(e.target.checked ? 'meas' : 'sky');
+  });
+  function setAimFromEvent(e) {
+    const r = cvMain.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    state.aim = { az: A.n360(state.face + (x - view.W / 2) / view.s), alt: clamp(ALT_MAX - y / view.s, 0, 90) };
+    dirty = true; renderTask();
+  }
+  $('#modeSeg').querySelectorAll('button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
+  document.querySelectorAll('#taskTime button').forEach(b => b.addEventListener('click', () => { state.playing = false; state.ms = clockMs(+b.dataset.min); taskMsg = ''; refresh(); }));
+  document.querySelectorAll('#taskDir button').forEach(b => b.addEventListener('click', () => answerDir(+b.dataset.d)));
+  $('#taskRec').addEventListener('click', recordAim);
+  $('#taskAns').addEventListener('click', showAnswer);
+  $('#taskMoon').addEventListener('click', findMoon);
+  $('#task .th').addEventListener('click', () => { const m = $('#task').classList.toggle('min'); $('#task .th').setAttribute('aria-expanded', m ? 'false' : 'true'); });
+  if (innerWidth < 620) { $('#task').classList.add('min'); $('#task .th').setAttribute('aria-expanded', 'false'); }
+  $('#taskPrev').addEventListener('click', () => setTask(state.task - 1));
+  $('#taskNext').addEventListener('click', () => setTask(state.task + 1));
+
+  // 面板與手風琴（一次展開一項）
+  const app = $('#app'), panel = $('#panel'), accs = [...document.querySelectorAll('.acc')];
+  const setAcc = (sec, open) => { sec.classList.toggle('open', open); sec.querySelector('.acc-h').setAttribute('aria-expanded', open ? 'true' : 'false'); };
+  const setPanel = open => {
+    state.panel = open; app.classList.toggle('panel-open', open); panel.inert = !open;
+    $('#panelBtn').setAttribute('aria-expanded', open ? 'true' : 'false'); $('#panelBtn').classList.toggle('on', open);
+    if (open && !accs.some(a => a.classList.contains('open'))) setAcc(accs[0], true);
+    dirty = true;
+  };
+  accs.forEach(sec => sec.querySelector('.acc-h').addEventListener('click', () => {
+    const was = sec.classList.contains('open'); accs.forEach(a => setAcc(a, false)); if (!was) setAcc(sec, true);
+  }));
+  $('#panelBtn').addEventListener('click', () => setPanel(!state.panel));
+  $('#panelClose').addEventListener('click', () => { setPanel(false); $('#panelBtn').focus(); });
+  panel.addEventListener('keydown', e => { if (e.key === 'Escape') { setPanel(false); $('#panelBtn').focus(); } });
+  $('#big').addEventListener('change', e => { if (e.target.checked) setPanel(false); });
+
+  // 小視窗：點一下，與主畫面互換
+  // g ↔ p 互換時，讓畫面中央看的方向一致：地面鏡頭看的方向＝人的面向
+  const syncDir = (from, to) => {
+    if (from === 'g' && to === 'p') state.face = A.n360(state.gb); else if (from === 'p' && to === 'g') state.gb = A.n360(state.face);
+    gbTween = null; tween = null;
+  };
+  const swap = () => { const old = state.view, nv = pipView(); syncDir(old, nv); state.view = nv; state.pv = old; refresh(); };
+  // 切換主畫面：小視窗內容盡量不動；只有新主畫面剛好是小視窗的內容時，才和原本的主畫面互換
+  const pickView = v => {
+    if (v === state.view) return;
+    const old = state.view, pv = pipView();
+    syncDir(old, v);
+    if (state.mode !== 'meas') state.pv = pv === v ? old : pv;
+    state.view = v; refresh();
+  };
+  const pipSwitch = () => { const o = pipOther(); if (o && state.mode !== 'meas') { state.pv = o; refresh(); } };
+  cvPip.addEventListener('click', e => {
+    const r = cvPip.getBoundingClientRect(), hit = pipHit(e.clientX - r.left, e.clientY - r.top);
+    if (hit && hit.act !== 'swap') { state.pv = hit.act; refresh(); } else swap();
+  });
+  cvPip.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); swap(); }
+    else if (e.key === 'c' || e.key === 'C') { e.preventDefault(); pipSwitch(); }
+  });
+
+  // 主畫面拖曳：人的視角＝轉動面向；太空視角＝旋轉相機
+  let drag = null;
+  cvMain.addEventListener('pointerdown', e => {
+    cvMain.setPointerCapture(e.pointerId);
+    if (state.mode === 'meas' && state.view === 'p') { drag = { aim: true, moved: true }; setAimFromEvent(e); return; }
+    drag = { x: e.clientX, y: e.clientY, face: state.face, gb: state.gb, yaw: spaceCam.yaw, a: spaceCam.a, moved: false };
+  });
+  cvMain.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (drag.aim) { setAimFromEvent(e); return; }
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+    if (!drag.moved) return;
+    if (state.view === 'p') { tween = null; state.face = A.n360(drag.face - dx / view.s); }
+    else if (state.view === 'g') { gbTween = null; state.gb = A.n360(drag.gb - dx * 0.4); }
+    else if (!isOrbit()) { camTween = null; state.cam = 'free'; spaceCam.yaw = drag.yaw + dx * 0.4; spaceCam.a = clamp(drag.a + dy * 0.35, 0, 90); }
+    dirty = true;
+  });
+  cvMain.addEventListener('pointerup', e => {
+    if (drag && !drag.moved && (state.view === 'p' || state.view === 'g')) {
+      const r = cvMain.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      const hit = chips.find(c => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h);
+      if (hit) { if (state.view === 'g') gbTurn(hit.az); else turnTo(hit.az); }
+    }
+    if (drag && drag.moved && !drag.aim) { updateControls(); saveHash(); }
+    drag = null;
+  });
+  cvMain.addEventListener('pointercancel', () => { drag = null; });
+
+  /* ---------- 主迴圈 ---------- */
+  let last = performance.now(), lastUI = 0, seaAcc = 0;
+  const DAYS_PER_SEC = { season: { 10: 10, 60: 30, 240: 60 }, moon: { 10: 1, 60: 2, 240: 4 } };   // 四季：慢/中/快 ≈ 36/12/6 秒一年；月相：≈ 30/15/7 秒一個月
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 0.1); last = now;
+    if (state.playing) {
+      if (state.mode === 'season' || state.mode === 'moon') {
+        seaAcc += dt * ((DAYS_PER_SEC[state.mode] || {})[state.speed] || 2);
+        if (seaAcc >= 1) {   // 一次走整數天、時刻不變；四季跨年就回到同一年的 1/1 一直循環，月相一直往後走
+          const n = Math.floor(seaAcc); seaAcc -= n;
+          const lp = A.localParts(state.ms), nd = A.localParts(state.ms + n * DAY_MS).date;
+          state.ms = A.msFromLocal(state.mode === 'moon' || nd.slice(0, 4) === lp.date.slice(0, 4) ? nd : lp.date.slice(0, 4) + '-01-01', lp.min);
+        }
+      } else state.ms += dt * state.speed * 60000;
+      dirty = true;
+      if (now - lastUI > 90) { lastUI = now; updateControls(); updateReadouts(); saveHash(); }
+    }
+    if (tween) {
+      const p = clamp((now - tween.t0) / tween.dur, 0, 1);
+      state.face = A.n360(tween.from + tween.d * ease(p)); dirty = true;
+      if (p >= 1) { tween = null; updateControls(); saveHash(); }
+    }
+    if (gbTween) {
+      const p = clamp((now - gbTween.t0) / gbTween.dur, 0, 1);
+      state.gb = A.n360(gbTween.from + gbTween.d * ease(p)); dirty = true;
+      if (p >= 1) { gbTween = null; updateControls(); saveHash(); }
+    }
+    if (camTween) {
+      const p = clamp((now - camTween.t0) / camTween.dur, 0, 1), e = ease(p);
+      spaceCam.yaw = lerp(camTween.from.yaw, camTween.to.yaw, e); spaceCam.a = lerp(camTween.from.a, camTween.to.a, e); dirty = true;
+      if (p >= 1) camTween = null;
+    }
+    if (dirty) { dirty = false; draw(); }
+    requestAnimationFrame(frame);
+  }
+
+
+  /* ============================================================
+   * 步驟 6：QR 分享、預設題目、掃描學生畫面
+   * ============================================================ */
+  const MODES = ['meas', 'sky', 'moon', 'season'];
+  const isWeb = /^https?:$/.test(location.protocol);
+  const baseGet = () => { try { const v = localStorage.getItem('sky.base'); if (v) return v; } catch (e) { /* 忽略 */ } return isWeb ? location.origin + location.pathname : ''; };
+  const baseSet = v => { try { localStorage.setItem('sky.base', v); } catch (e) { /* 忽略 */ } };
+  const normBase = v => (v || '').trim().replace(/#.*$/, '');
+  // 精簡版 hash：只寫和預設值不同的項目，QR 比較小、比較好掃
+  function stateHash(s) {
+    const lp = A.localParts(s.ms);
+    let h = `m=${s.mode}&d=${lp.date}&t=${A.fmtHM(lp.min)}&loc=${s.loc}&f=${Math.round(A.n360(s.face)) % 360}&v=${s.view}`;
+    if (s.mode !== 'meas' && s.grid) h += '&g=1';
+    if (s.mode === 'sky' && !s.trail) h += '&tr=0';
+    if (!s.stars) h += '&st=0';
+    if (s.mode !== 'meas' && !s.pip) h += '&pip=0';
+    if (s.mode !== 'meas' && s.pv && s.pv !== s.view && s.pv !== viewOf(s.view).pip) h += `&pv=${s.pv}`;
+    if (!s.sight) h += '&sg=0';
+    if (s.mode === 'meas') h += `&task=${s.task + 1}`;
+    if (s.cam && s.cam !== 'tb') h += `&cam=${s.cam}`;
+    if (s.mode === 'season' && s.orbElev !== 30) h += `&oe=${s.orbElev}`;
+    if (s.view === 'g' && Math.round(s.gb) % 360 !== 180) h += `&gb=${Math.round(A.n360(s.gb)) % 360}`;
+    return h;
+  }
+  const PRESETS = [
+    { title: '自由探索', note: '看太陽和月亮怎麼動', s: { mode: 'sky', t: 900, view: 'g', face: 180 } },
+    { title: '任務 1　找太陽', note: '量太陽的方位與高度角', s: { mode: 'meas', t: 540, view: 'p', face: 180, task: 0 } },
+    { title: '任務 2　太陽最高在哪', note: '找太陽最高的時刻', s: { mode: 'meas', t: 600, view: 'p', face: 180, task: 1 } },
+    { title: '任務 3　找月亮', note: '量月亮的方位與高度角', s: { mode: 'meas', t: 1110, view: 'p', face: 180, task: 2 } },
+    { title: '月相與月出', note: '月相和月出時間', s: { mode: 'moon', t: 1080, view: 'p', face: 180 } },
+    { title: '太陽與四季', note: '一年中太陽路線的變化', s: { mode: 'season', t: 720, view: 'g', face: 180 } },
+    { title: '地球繞太陽', note: '一年中地球在軌道上的位置', s: { mode: 'season', t: 720, view: 's', cam: 'o', face: 180 } },
+    { title: '地面看日月', note: '站在地上，從旁邊看太陽和月亮', s: { mode: 'sky', t: 600, view: 'g', face: 180, gb: 180 } },
+    { title: '太空看日月地', note: '月亮為什麼一半亮一半暗', s: { mode: 'sky', t: 1140, view: 's', face: 180 } }
+  ];
+  const presetState = (pr, date, loc) => ({ grid: false, trail: true, stars: true, pip: true, sight: true, task: 0, cam: 'tb', orbElev: 30, gb: 180, loc, ...pr.s, ms: A.msFromLocal(date, pr.s.t) });
+  const presetUrl = (pr, date, loc) => `${normBase(baseGet())}#${stateHash(presetState(pr, date, loc))}`;
+
+  function sharedHash(text) {
+    try {
+      const t = String(text || '').trim(); let h;
+      if (/^https?:\/\//i.test(t)) h = new URL(t).hash; else if (/^#?m=/.test(t)) h = t; else return null;
+      h = h.replace(/^#/, ''); const p = new URLSearchParams(h);
+      return MODES.includes(p.get('m')) ? h : null;
+    } catch (e) { return null; }
+  }
+  function applyHash(h) {
+    state.playing = false; state.pipBefore = false; state.trailBefore = undefined; state.aim = null; state.camBefore = null;
+    Object.assign(state, { grid: false, trail: true, stars: true, pip: true, sight: true, task: 0, cam: 'tb', orbElev: 30, gb: 180 });
+    Object.assign(spaceCam, CAM_PRESET.tb); camTween = null;
+    loadHash(h); applyMode(); sel.value = state.loc; refresh();
+  }
+
+  /* ---- 視窗、分頁 ---- */
+  const modal = $('#shareModal'); let shareTab = 'mine';
+  const warnTxt = () => { const b = normBase(baseGet()); return !b ? '還沒有網站網址：QR code 掃出來會打不開。請把檔案放到 GitHub Pages，再在上面填入網址。' : /^https?:\/\//i.test(b) ? '' : '這個網址不是 http 開頭，學生的裝置可能打不開。'; };
+  function qrInto(cv, url, px) { try { QR.draw(cv, url, px, 'M'); return true; } catch (e) { cv.width = cv.height = 10; return false; } }
+  function renderMine() {
+    const url = `${normBase(baseGet())}#${stateHash(state)}`;
+    const ok = qrInto($('#qrMine'), url, 560);
+    $('#qrMineUrl').textContent = ok ? url : '資料太長，無法產生 QR code';
+    return url;
+  }
+  function renderPresets() {
+    const date = $('#pDate').value || A.localParts(state.ms).date, loc = $('#pLoc').value || state.loc, grid = $('#pGrid'); grid.textContent = '';
+    PRESETS.forEach(pr => {
+      const url = presetUrl(pr, date, loc), card = document.createElement('div'); card.className = 'pcard'; card.tabIndex = 0;
+      card.innerHTML = '<b></b><canvas></canvas><span></span>'; card.querySelector('b').textContent = pr.title; card.querySelector('span').textContent = pr.note;
+      qrInto(card.querySelector('canvas'), url, 360);
+      const open = () => showBig(url, pr.title);
+      card.addEventListener('click', open); card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+      grid.appendChild(card);
+    });
+  }
+  function renderShare() { $('#baseUrl').value = baseGet(); $('#baseWarn').textContent = warnTxt(); if (shareTab === 'mine') renderMine(); else if (shareTab === 'presets') renderPresets(); }
+  function setTab(t) {
+    if (t !== 'scan') scanStop();
+    shareTab = t; modal.classList.remove('t-mine', 't-presets', 't-scan'); modal.classList.add('t-' + t);
+    modal.querySelectorAll('.tabs button').forEach(b => { b.classList.toggle('on', b.dataset.t === t); b.setAttribute('aria-selected', b.dataset.t === t ? 'true' : 'false'); });
+    if (t === 'presets' && !$('#pDate').value) $('#pDate').value = A.localParts(state.ms).date;
+    renderShare();
+  }
+  let lastFocus = null;
+  function openShare(t) { lastFocus = document.activeElement; setPanel(false); modal.hidden = false; setTab(t || 'mine'); $('#shareClose').focus(); }
+  function closeShare() { scanStop(); modal.hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+  $('#shareClose').addEventListener('click', closeShare);
+  modal.addEventListener('click', e => { if (e.target === modal) closeShare(); });
+  modal.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.t)));
+  $('#baseUrl').addEventListener('input', e => { baseSet(normBase(e.target.value)); $('#baseWarn').textContent = warnTxt(); if (shareTab === 'mine') renderMine(); else if (shareTab === 'presets') renderPresets(); });
+  Object.entries(LOCS).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.name; $('#pLoc').appendChild(o); });
+  $('#pLoc').value = state.loc; $('#pLoc').addEventListener('change', renderPresets); $('#pDate').addEventListener('change', renderPresets);
+  $('#pPrint').addEventListener('click', () => window.print());
+  $('#qrBtn').addEventListener('click', () => openShare('mine'));
+  $('#openMine').addEventListener('click', () => openShare('mine'));
+  $('#openPresets').addEventListener('click', () => openShare('presets'));
+  $('#openScan').addEventListener('click', () => openShare('scan'));
+  $('#qrCopy').addEventListener('click', async () => { const u = renderMine(); try { await navigator.clipboard.writeText(u); $('#qrCopy').textContent = '已複製 ✓'; } catch (e) { $('#qrCopy').textContent = '請手動複製下面的網址'; } setTimeout(() => { $('#qrCopy').textContent = '複製連結'; }, 2000); });
+  $('#qrMineBig').addEventListener('click', () => showBig(renderMine(), '我的畫面'));
+  /* 放大投影 */
+  function showBig(url, title) {
+    const big = $('#qrBig'), side = Math.floor(Math.min(innerWidth, innerHeight * 0.82) * 0.92);
+    if (!qrInto($('#qrBigCv'), url, side)) return;
+    $('#qrBigCap').textContent = title; big.hidden = false;
+  }
+  $('#qrBig').addEventListener('click', () => { $('#qrBig').hidden = true; });
+  window.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (!$('#qrBig').hidden) $('#qrBig').hidden = true; else if (!modal.hidden) closeShare(); });
+
+  /* ---- 掃描 ---- */
+  let scanStream = null, scanRaf = 0, scanBusy = false, scanDet = null, scanLast = 0, scanBack = null, scanBackBig = false;
+  const scanCv = document.createElement('canvas'), smsg = t => { $('#scanMsg').textContent = t; };
+  function scanStop() { if (scanRaf) cancelAnimationFrame(scanRaf); scanRaf = 0; if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; } const v = $('#scanVideo'); if (v) v.srcObject = null; }
+  async function scanStart() {
+    scanStop();
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('nocam'), { name: 'NoCam' });
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      const v = $('#scanVideo'); v.srcObject = scanStream; await v.play();
+      try { scanDet = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['qr_code'] }) : null; } catch (e) { scanDet = null; }
+      smsg('對準學生的 QR code，保持穩定…'); scanRaf = requestAnimationFrame(scanTick);
+    } catch (e) {
+      scanStop();
+      smsg(e && e.name === 'NotAllowedError' ? '相機被擋住了。請在瀏覽器網址列旁允許使用相機，再按一次「開啟相機」。'
+        : '開不了相機（相機需要 https 網站，也要有鏡頭）。可以改用「用照片掃描」或「貼上連結」。');
+    }
+  }
+  async function scanTick(t) {
+    if (!scanStream) return;
+    scanRaf = requestAnimationFrame(scanTick);
+    if (scanBusy || t - scanLast < 110) return; scanLast = t; scanBusy = true;
+    try {
+      const v = $('#scanVideo');
+      if (v.videoWidth) {
+        let text = null;
+        if (scanDet) { const r = await scanDet.detect(v); if (r.length) text = r[0].rawValue; }
+        if (!text) { text = decodeSource(v, v.videoWidth, v.videoHeight); }
+        if (text) handleScanned(text);
+      }
+    } catch (e) { /* 這一幀失敗就換下一幀 */ } finally { scanBusy = false; }
+  }
+  function decodeSource(src, w, h) {
+    const k = Math.min(1, 800 / Math.max(w, h)); scanCv.width = Math.max(1, Math.round(w * k)); scanCv.height = Math.max(1, Math.round(h * k));
+    const c = scanCv.getContext('2d', { willReadFrequently: true }); c.fillStyle = '#fff'; c.fillRect(0, 0, scanCv.width, scanCv.height); c.drawImage(src, 0, 0, scanCv.width, scanCv.height);
+    return QR.decode(c.getImageData(0, 0, scanCv.width, scanCv.height));
+  }
+  function handleScanned(text) {
+    const h = sharedHash(text);
+    if (!h) { smsg('掃到了，但這不是這個教具的 QR code。'); return false; }
+    scanBack = fullHash(); scanBackBig = document.documentElement.classList.contains('big'); scanStop();
+    const big = $('#scanBig').checked; closeShare(); applyHash(h);
+    if (big) { $('#big').checked = true; document.documentElement.classList.add('big'); dirty = true; }
+    $('#toastTxt').textContent = '已載入學生的畫面'; $('#toast').hidden = false; return true;
+  }
+  $('#scanStart').addEventListener('click', scanStart);
+  $('#scanStop').addEventListener('click', () => { scanStop(); smsg('已停止'); });
+  $('#scanLoad').addEventListener('click', () => { const v = $('#scanPaste').value; if (!handleScanned(v)) smsg('這不是這個教具的連結。'); });
+  $('#scanFile').addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+    try { const bmp = await createImageBitmap(f); const text = decodeSource(bmp, bmp.width, bmp.height); if (text) handleScanned(text); else smsg('照片裡找不到 QR code。請拍近一點、拍正一點再試。'); }
+    catch (err) { smsg('讀不了這張照片。'); }
+  });
+  $('#toastBack').addEventListener('click', () => { if (scanBack) { applyHash(scanBack); $('#big').checked = scanBackBig; document.documentElement.classList.toggle('big', scanBackBig); dirty = true; } scanBack = null; $('#toast').hidden = true; });
+  $('#toastX').addEventListener('click', () => { $('#toast').hidden = true; });
+
+  /* ---------- 操作導覽 ---------- */
+  // 互動式導覽：做了動作才往下（也有「下一步」備案）；任何一步都能離開，離開後畫面還原成導覽前的樣子
+  let tourMem = false, tour = null;
+  const tourSeen = () => { try { return localStorage.getItem('sky.toured') === '1'; } catch (e) { return tourMem; } };
+  const tourMark = () => { tourMem = true; try { localStorage.setItem('sky.toured', '1'); } catch (e) { /* 這次瀏覽期間不再問 */ } };
+  const angD = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+  const isVis = el => { if (!el) return false; const r = el.getBoundingClientRect(); if (r.width < 4 || r.height < 4) return false; const cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden'; };
+  const TOUR_STEPS = [
+    { sel: '#sky', free: true, text: '用手指左右拖曳畫面，轉一轉！', ok: t => angD(state.gb, t.gb) > 8 || angD(state.face, t.face) > 8 },
+    { sel: '#bar', text: '拖曳這條時間線，或按「播放」，看太陽怎麼走', ok: t => Math.abs(state.ms - t.ms) > 60000 },
+    { sel: '#hudTime', text: '點這裡，可以換日期和時間', ok: () => !$('#dtPop').hidden, leave: () => dtOpen(false) },
+    { sel: '#viewSeg', text: '按「人」，看他眼睛看出去的樣子', ok: () => state.view === 'p' },
+    { sel: '#pip', text: '點右上的小視窗，和大畫面互換', ok: t => state.view !== t.view },
+    { sel: '#modeSeg', text: '最上面是三個主題：日月、月相、四季。想看哪個就點哪個' },
+    { sel: null, text: '導覽結束！之後想再看，打開「面板」最上面的「操作導覽」', last: true }
+  ];
+  const tourEl = { root: $('#tour'), ring: $('#tourRing'), dot: $('#tourDot'), card: $('#tourCard'), n: $('#tourN'), t: $('#tourText'), done: $('#tourDone'), next: $('#tourNext') };
+  const tourShields = [...document.querySelectorAll('.tour-sh')];
+  const setBox = (el, x, y, w, h) => { el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.width = Math.max(0, w) + 'px'; el.style.height = Math.max(0, h) + 'px'; };
+  function tourShow(i) {
+    // 找到下一個看得到目標的步驟（不同裝置的版面不一樣，看不到的就跳過）
+    while (i < TOUR_STEPS.length && TOUR_STEPS[i].sel && !isVis($(TOUR_STEPS[i].sel))) i++;
+    const st = TOUR_STEPS[i];
+    if (!st) return tourEnd(true);
+    if (tour.step && tour.step.leave) tour.step.leave();
+    tour.i = i; tour.step = st; tour.fin = false; tour.t0 = { gb: state.gb, face: state.face, ms: state.ms, view: state.view };
+    const vis = TOUR_STEPS.filter(s => !s.last);
+    tourEl.n.textContent = st.last ? '' : `第 ${i + 1} / ${vis.length} 步`;
+    tourEl.t.textContent = st.text; tourEl.done.hidden = true;
+    tourEl.next.textContent = st.last ? '完成' : '下一步';
+    tourEl.dot.style.display = st.free ? 'block' : 'none';
+    tourEl.next.focus({ preventScroll: true });
+  }
+  function tourFrame() {
+    if (!tour) return;
+    const st = tour.step, W = innerWidth, H = innerHeight, el = st.sel && $(st.sel);
+    if (st.sel && !st.free && !isVis(el)) { tourShow(tour.i + 1); tour.raf = requestAnimationFrame(tourFrame); return; }
+    let r = null;
+    if (el && !st.free) { const b = el.getBoundingClientRect(), p = 6; r = { x: Math.max(0, b.left - p), y: Math.max(0, b.top - p), w: b.width + p * 2, h: b.height + p * 2 }; }
+    const sh = tourShields;
+    if (st.free) { sh.forEach(e => setBox(e, 0, 0, 0, 0)); tourEl.ring.style.display = 'none'; }
+    else if (r) {
+      setBox(sh[0], 0, 0, W, r.y); setBox(sh[1], 0, r.y + r.h, W, H - r.y - r.h); setBox(sh[2], 0, r.y, r.x, r.h); setBox(sh[3], r.x + r.w, r.y, W - r.x - r.w, r.h);
+      setBox(tourEl.ring, r.x, r.y, r.w, r.h); tourEl.ring.style.display = 'block';
+    } else { setBox(sh[0], 0, 0, W, H); sh.slice(1).forEach(e => setBox(e, 0, 0, 0, 0)); tourEl.ring.style.display = 'none'; }
+    // 說明卡：放在目標上方或下方空間比較大的一邊，不蓋住目標
+    const cw = tourEl.card.offsetWidth, ch = tourEl.card.offsetHeight, m = 10;
+    let x, y;
+    if (st.free && H < 480) { x = W - cw - m; y = 62; tourEl.dot.style.left = W * 0.4 + 'px'; tourEl.dot.style.top = H * 0.55 + 'px'; }
+    else if (st.free) { x = (W - cw) / 2; y = Math.max(m, H * 0.14); tourEl.dot.style.left = W / 2 + 'px'; tourEl.dot.style.top = H * 0.5 + 'px'; }
+    else if (!r) { x = (W - cw) / 2; y = (H - ch) / 2; }
+    else {
+      const below = H - (r.y + r.h), above = r.y;
+      x = Math.min(W - cw - m, Math.max(m, r.x + r.w / 2 - cw / 2));
+      y = below >= ch + 14 ? r.y + r.h + 12 : above >= ch + 14 ? r.y - ch - 12 : (below >= above ? H - ch - m : m);
+    }
+    tourEl.card.style.left = x + 'px'; tourEl.card.style.top = y + 'px';
+    if (st.ok && !tour.fin && st.ok(tour.t0)) {
+      tour.fin = true; tourEl.done.hidden = false; const at = tour.i;
+      setTimeout(() => { if (tour && tour.i === at) tourShow(at + 1); }, 900);
+    }
+    tour.raf = requestAnimationFrame(tourFrame);
+  }
+  function tourStart() {
+    if (tour) return;
+    closeAsk();
+    tour = { snap: { ...state }, cam: { ...spaceCam }, i: 0, step: null, raf: 0, opener: document.activeElement };
+    delete tour.snap.panel;
+    setPanel(false); dtOpen(false); state.playing = false;
+    applyHash('m=sky&v=g&f=180'); state.ms = Date.now(); state.pv = ''; refresh();
+    document.body.classList.add('touring'); tourEl.root.hidden = false;
+    tourShow(0); tour.raf = requestAnimationFrame(tourFrame);
+  }
+  function tourEnd() {
+    if (!tour) return;
+    cancelAnimationFrame(tour.raf); if (tour.step && tour.step.leave) tour.step.leave();
+    const { snap, cam, opener } = tour; tour = null; tourMark();
+    tourEl.root.hidden = true; document.body.classList.remove('touring');
+    state.playing = false; Object.assign(state, snap); Object.assign(spaceCam, cam); camTween = null; gbTween = null; tween = null;
+    applyMode(); sel.value = state.loc; refresh();
+    if (opener && opener.focus) opener.focus({ preventScroll: true });
+  }
+  tourEl.next.addEventListener('click', () => { if (tour.step.last) tourEnd(); else tourShow(tour.i + 1); });
+  $('#tourExit').addEventListener('click', () => tourEnd());
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && tour) { e.preventDefault(); tourEnd(); } }, true);
+  $('#tourStart').addEventListener('click', () => { setPanel(false); tourStart(); });
+  // 第一次打開的詢問卡
+  const askEl = $('#tourAsk');
+  function closeAsk() { if (!askEl.hidden) { askEl.hidden = true; tourMark(); } }
+  $('#tourAskYes').addEventListener('click', tourStart);
+  $('#tourAskNo').addEventListener('click', closeAsk);
+  askEl.addEventListener('pointerdown', e => { if (e.target === askEl) closeAsk(); });
+  askEl.addEventListener('keydown', e => { if (e.key === 'Escape') closeAsk(); });
+  if (cleanStart && !tourSeen() && !$('#big').checked) setTimeout(() => { if (!tour) { askEl.hidden = false; $('#tourAskYes').focus({ preventScroll: true }); } }, 700);
+
+  /* ---------- 啟動 ---------- */
+  loadHash(); applyMode();
+  sel.value = state.loc;
+  window.addEventListener('hashchange', () => { loadHash(); applyMode(); sel.value = state.loc; refresh(); });
+  new ResizeObserver(() => { dirty = true; }).observe(wrap);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
+  window.__sky = { gbTurn, state, A, refresh, draw, spaceCam, setPanel, setMode, setTask, openShare, handleScanned, stateHash, fullHash };
+  refresh();
+  requestAnimationFrame(frame);
+})();
+
+</script>
+</body>
+</html>
